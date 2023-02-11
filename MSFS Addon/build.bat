@@ -1,13 +1,34 @@
 @setlocal enabledelayedexpansion
 @echo off
 
-IF EXIST layout.json ( 
-    DEL /f layout.json 
+IF EXIST out/layout.json ( 
+    DEL /f out\layout.json 
 )
 
-echo ^{ > layout.json
-echo    "content": [ >> layout.json
+@REM IF EXIST Build/Packages (
+@REM      rmdir /S /Q _Temp
+@REM     rmdir /S /Q Build\Packages
+@REM )
 
+IF EXIST InGamePanels (
+    rmdir /S /Q InGamePanels
+    mkdir InGamePanels
+)
+
+IF EXIST out (
+    rmdir /S /Q out
+    mkdir out
+)
+
+echo Launching MSFS to create panel SPB
+"%MSFS_SDK%\Tools\bin\fspackagetool.exe" -nopause "Build\meqolo-vpilot-extender.xml"
+copy "Build\Packages\meqolo-vpilot-extender\Build\meqolo-vpilot-extender.spb" "InGamePanels" 
+
+
+echo ^{ > out/layout.json
+echo    "content": [ >> out/layout.json
+
+set MSFS_SDK=C:\MSFS SDK\
 set bottomdir=%~dp0
 set packageVersion=0
 set /A totalFileSize=0
@@ -29,18 +50,22 @@ for /F "tokens=* delims=," %%G in (manifest.json) do (
     set textToOutput=!manifest!
 
     IF "!loopIndex!"=="0" (
-        DEL /F manifest.json
+        IF EXIST out/manifest.json (
+            DEL /F out\manifest.json
+        )
     )
 
     IF not "x!manifest:total_package_size=!"=="x!manifest!" (
         set textToOutput=    "total_package_size": "!totalFileSize!"
     )
 
-    echo !textToOutput! >> manifest.json
+    echo !textToOutput! >> out/manifest.json
     set /A loopIndex=loopIndex+1
 )
 
 set /A loopIndex=0
+
+echo Copying files to /out/
 
 for /F "delims=" %%A in ('dir /B/S/A-D') do (
     set absPath=%%~fA
@@ -55,17 +80,19 @@ for /F "delims=" %%A in ('dir /B/S/A-D') do (
         set /A loopIndex=loopIndex+1
         set return=!return:~1,-1!!return:~-1!
 
-        echo        ^{ >> layout.json
-        echo            "path": "!path!", >> layout.json
-        echo            "size": %%~zA, >> layout.json
-        echo            "date": !datePrefix!!return! >> layout.json
+        echo        ^{ >> out/layout.json
+        echo            "path": "!path!", >> out/layout.json
+        echo            "size": %%~zA, >> out/layout.json
+        echo            "date": !datePrefix!!return! >> out/layout.json
 
-        IF !loopIndex!==!loopSize! (echo        ^} >> layout.json) else (echo       ^}, >> layout.json)
+        IF !loopIndex!==!loopSize! (echo        ^} >> out/layout.json) else (echo       ^}, >> out/layout.json)
+
+        echo F | %systemroot%\System32\xcopy "!path:/=\!" "out\!path:/=\!" /y
     )
 )
 
-echo    ^] >> layout.json
-echo ^} >> layout.json
+echo    ^] >> out/layout.json
+echo ^} >> out/layout.json
 
 :GET_RELATIVE_PATH absPath
     set path=!absPath!
@@ -80,8 +107,10 @@ EXIT /B 0
         "layout.json"
         "manifest.json"
         "build.bat"
+        "out"
+        "Build"
     ) DO (
-        IF /I !path!==%%~G set "%fileBlacklisted=true"
+        IF not "x!path:%%~G=!"=="x!path!" set "%fileBlacklisted=true"
     )
 EXIT /B 0
 
