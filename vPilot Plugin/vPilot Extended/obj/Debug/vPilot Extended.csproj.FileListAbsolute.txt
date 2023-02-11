@@ -1,0 +1,9 @@
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Extended\vPilot Extended\bin\Debug\vPilot Extended.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Extended\vPilot Extended\bin\Debug\vPilot Extended.pdb
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Extended\vPilot Extended\bin\Debug\RossCarlson.Vatsim.Vpilot.Plugins.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Extended\vPilot Extended\bin\Debug\RossCarlson.Vatsim.Vpilot.Plugins.xml
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Extended\vPilot Extended\obj\Debug\vPilot Extended.csproj.AssemblyReference.cache
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Extended\vPilot Extended\obj\Debug\vPilot Extended.csproj.CoreCompileInputs.cache
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Extended\vPilot Extended\obj\Debug\vPilot Extended.csproj.CopyComplete
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Extended\vPilot Extended\obj\Debug\vPilot Extended.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Extended\vPilot Extended\obj\Debug\vPilot Extended.pdb

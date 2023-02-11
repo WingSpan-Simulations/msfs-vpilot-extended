@@ -1,0 +1,29 @@
+{ 
+   "content": [ 
+       { 
+           "path": "html_ui/InGamePanels/PanelvPilotExtender/vPilotExtender.css", 
+           "size": 1667, 
+           "date": 116444737676087165 
+      }, 
+       { 
+           "path": "html_ui/InGamePanels/PanelvPilotExtender/vPilotExtender.html", 
+           "size": 1805, 
+           "date": 116444737676087165 
+      }, 
+       { 
+           "path": "html_ui/InGamePanels/PanelvPilotExtender/vPilotExtender.js", 
+           "size": 5344, 
+           "date": 116444737676087165 
+      }, 
+       { 
+           "path": "html_ui/Textures/Menu/toolbar/ICON_TOOLBAR_MEQOLO_VPILOT_EXTENDER.svg", 
+           "size": 1689, 
+           "date": 116444737676087165 
+      }, 
+       { 
+           "path": "InGamePanels/meqolo-vpilot-extender.xml", 
+           "size": 541, 
+           "date": 116444737676087165 
+       } 
+   ] 
+} 
