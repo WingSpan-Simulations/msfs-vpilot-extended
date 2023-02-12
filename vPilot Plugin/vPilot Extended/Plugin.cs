@@ -17,11 +17,11 @@ namespace vPilotExtended
 
         public string Name => "vPilot Extended";
 
-        public void Initialize(IBroker broker)
+        public async void Initialize(IBroker broker)
         {
             this.broker = broker;
             this.server = new Server(this.broker);
-            this.server.Initialize();
+            await this.server.Initialize();
             this.broker.PostDebugMessage("[vPilot Extended " + this.Version.ToString() + "] Extension loaded");
 
             this.broker.NetworkConnected += new EventHandler<NetworkConnectedEventArgs>(this.NetworkConnectedEvent);
