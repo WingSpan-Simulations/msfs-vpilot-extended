@@ -7,3 +7,12 @@ D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Extended\vPilot Ext
 D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Extended\vPilot Extended\obj\Release\vPilot Extended.csproj.CopyComplete
 D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Extended\vPilot Extended\obj\Release\vPilot Extended.dll
 D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Extended\vPilot Extended\obj\Release\vPilot Extended.pdb
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\vPilot Extended.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\vPilot Extended.pdb
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\RossCarlson.Vatsim.Vpilot.Plugins.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\RossCarlson.Vatsim.Vpilot.Plugins.xml
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\obj\Release\vPilot Extended.csproj.AssemblyReference.cache
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\obj\Release\vPilot Extended.csproj.CoreCompileInputs.cache
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\obj\Release\vPilot Extended.csproj.CopyComplete
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\obj\Release\vPilot Extended.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\obj\Release\vPilot Extended.pdb

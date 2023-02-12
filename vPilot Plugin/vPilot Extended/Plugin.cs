@@ -12,6 +12,7 @@ namespace vPilotExtended
     public class vPilotExtended: IPlugin
     {
         private Version Version = new Version(0, 1, 0);
+        private Server server;
         private IBroker broker;
 
         public string Name => "vPilot Extended";
@@ -19,6 +20,8 @@ namespace vPilotExtended
         public void Initialize(IBroker broker)
         {
             this.broker = broker;
+            this.server = new Server(this.broker);
+            this.server.Initialize();
             this.broker.PostDebugMessage("[vPilot Extended " + this.Version.ToString() + "] Extension loaded");
 
             this.broker.NetworkConnected += new EventHandler<NetworkConnectedEventArgs>(this.NetworkConnectedEvent);

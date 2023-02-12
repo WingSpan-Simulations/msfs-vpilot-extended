@@ -1,3 +1,6 @@
 /MSFS Addon/Build/_Temp
 /MSFS Addon/Build/Packages
 /MSFS Addon/out
+/vPilot Plugin/.vs
+/vPilot Plugin/obj/
+/vPilot Plugin/bin/Debug
