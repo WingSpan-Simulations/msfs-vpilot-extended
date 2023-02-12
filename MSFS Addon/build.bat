@@ -5,11 +5,6 @@ IF EXIST out/layout.json (
     DEL /f out\layout.json 
 )
 
-@REM IF EXIST Build/Packages (
-@REM      rmdir /S /Q _Temp
-@REM     rmdir /S /Q Build\Packages
-@REM )
-
 IF EXIST InGamePanels (
     rmdir /S /Q InGamePanels
     mkdir InGamePanels
@@ -21,8 +16,8 @@ IF EXIST out (
 )
 
 echo Launching MSFS to create panel SPB
-"%MSFS_SDK%\Tools\bin\fspackagetool.exe" -nopause "Build\meqolo-vpilot-extender.xml"
-copy "Build\Packages\meqolo-vpilot-extender\Build\meqolo-vpilot-extender.spb" "InGamePanels" 
+"%MSFS_SDK%\Tools\bin\fspackagetool.exe" -nopause "build\meqolo-vpilot-extender.xml"
+copy "build\Packages\meqolo-vpilot-extender\build\meqolo-vpilot-extender.spb" "InGamePanels" 
 
 
 echo ^{ > out/layout.json
@@ -108,7 +103,7 @@ EXIT /B 0
         "manifest.json"
         "build.bat"
         "out"
-        "Build"
+        "build"
     ) DO (
         IF not "x!path:%%~G=!"=="x!path!" set "%fileBlacklisted=true"
     )

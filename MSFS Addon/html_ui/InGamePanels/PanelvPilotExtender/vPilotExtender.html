@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
   <head>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="/SCSS/common.css" />
@@ -10,10 +11,7 @@
     <script type="text/javascript" src="/JS/dataStorage.js"></script>
     <script type="text/javascript" src="/JS/buttons.js"></script>
     <script type="text/javascript" src="/JS/Services/ToolBarPanels.js"></script>
-    <script
-      type="text/javascript"
-      src="/Pages/VCockpit/Instruments/Shared/BaseInstrument.js"
-    ></script>
+    <script type="text/javascript" src="/Pages/VCockpit/Instruments/Shared/BaseInstrument.js"></script>
 
     <link rel="import" href="/templates/NewPushButton/NewPushButton.html" />
     <link rel="import" href="/templates/ToggleButton/toggleButton.html" />
@@ -29,37 +27,25 @@
 
   <body class="border-box">
     <ingamepanel-custom>
-      <ingame-ui
-        id="vPEPanel"
-        panel-id="PANEL_VPILOT_EXTENDER"
-        title=""
-        class="ingameUiFrame panelInvisible"
-        content-fit="true"
-        min-width="160"
-        min-height="90"
-      >
-        <radio-list-button
-          class="condensed-interactive panel-option-element"
-          id="pageSelection"
-          data-input-group="RADIO-LIST-BUTTON"
-          tabindex="-1"
-        >
-          <new-push-button
-            class="condensed-interactive small selected"
-            title="FLIGHT PLAN"
-            data-input-group="NEW-PUSH-BUTTON"
-            tabindex="1"
-          ></new-push-button>
-          <new-push-button
-            class="condensed-interactive small"
-            title="AIR TRAFFIC CONTROL"
-            data-input-group="NEW-PUSH-BUTTON"
-            tabindex="1"
-          ></new-push-button>
+      <ingame-ui id="vPEPanel" panel-id="PANEL_VPILOT_EXTENDER" title="" class="ingameUiFrame panelInvisible"
+        content-fit="true" min-width="160" min-height="90">
+
+        <div id="awaiting-connection">
+          Awaiting vPilot connection...
+        </div>
+
+        <!-- <radio-list-button class="condensed-interactive panel-option-element" id="pageSelection"
+          data-input-group="RADIO-LIST-BUTTON" tabindex="-1">
+          <new-push-button class="condensed-interactive small selected" title="FLIGHT PLAN"
+            data-input-group="NEW-PUSH-BUTTON" tabindex="1"></new-push-button>
+          <new-push-button class="condensed-interactive small" title="AIR TRAFFIC CONTROL"
+            data-input-group="NEW-PUSH-BUTTON" tabindex="1"></new-push-button>
         </radio-list-button>
+
         <section id="MainDisplay">header</section>
-        <section id="Footer">footer</section>
+        <section id="Footer">footer</section> -->
       </ingame-ui>
     </ingamepanel-custom>
   </body>
+
 </html>

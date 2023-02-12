@@ -1,18 +1,38 @@
 ﻿using System;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using System.Threading.Tasks;
 using RossCarlson.Vatsim.Vpilot.Plugins;
 
-namespace vPilotExtended { 
+namespace vPilotExtended {
+    class WebSocketConnection
+    {
+        public readonly NetworkStream stream;
+
+        public WebSocketConnection(TcpClient client)
+        {
+            stream = client.GetStream();
+        }
+
+        public async Task SendAsync(byte[] data)
+        {
+            await stream.WriteAsync(data, 0, data.Length);
+        }
+    }
+
     class Server
     {
-        public IBroker broker;
+        private IBroker broker;
+        private Action<string> WebSocketMessageRecievedEvent;
+        private WebSocketConnection connection = null;
 
-        public Server(IBroker broker)
+        public Server(IBroker broker, Action<string> WebSocketMessageRecievedEvent)
         {
             this.broker = broker;
+            this.WebSocketMessageRecievedEvent = WebSocketMessageRecievedEvent;
         }
 
         public async Task Initialize()
@@ -24,18 +44,16 @@ namespace vPilotExtended {
             while (true)
             {
                 var client = await listener.AcceptTcpClientAsync();
-                _ = HandleConnectionAsync(client); // use discard operator to suppress warning
+                this.connection = new WebSocketConnection(client);
+                _ = HandleConnectionAsync(); // use discard operator to suppress warning
             }
         }
 
-        async Task HandleConnectionAsync(TcpClient client)
+        async Task HandleConnectionAsync()
         {
-            var stream = client.GetStream();
-
             // Read handshake request
             var buffer = new byte[1024];
-            var bytes = await stream.ReadAsync(buffer, 0, buffer.Length);
-            var request = Encoding.UTF8.GetString(buffer, 0, bytes);
+            var bytes = await this.connection.stream.ReadAsync(buffer, 0, buffer.Length);
 
             // Send handshake response
             var response = "HTTP/1.1 101 Switching Protocols\r\n" +
@@ -44,15 +62,15 @@ namespace vPilotExtended {
                            "Sec-WebSocket-Accept: " + Convert.ToBase64String(
                                System.Security.Cryptography.SHA1.Create()
                                    .ComputeHash(Encoding.UTF8.GetBytes(
-                                       new System.Text.RegularExpressions.Regex("Sec-WebSocket-Key: (.*)").Match(request).Groups[1].Value.Trim() + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+                                       new System.Text.RegularExpressions.Regex("Sec-WebSocket-Key: (.*)").Match(Encoding.UTF8.GetString(buffer, 0, bytes)).Groups[1].Value.Trim() + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
                                    ))
                            ) + "\r\n\r\n";
-            await stream.WriteAsync(Encoding.UTF8.GetBytes(response), 0, response.Length);
+            await this.connection.SendAsync(Encoding.UTF8.GetBytes(response));
 
             // Read and write frames
             while (true)
             {
-                bytes = await stream.ReadAsync(buffer, 0, buffer.Length);
+                bytes = await this.connection.stream.ReadAsync(buffer, 0, buffer.Length);
                 if (bytes == 0) break;
 
                 // Decode payload
@@ -75,11 +93,21 @@ namespace vPilotExtended {
 
                 // Write payload to console
                 var message = Encoding.UTF8.GetString(payload);
-                this.broker.PostDebugMessage(message);
+                this.WebSocketMessageRecievedEvent(message);
 
                 // Echo frame back
-                await stream.WriteAsync(new byte[] { 0x81, (byte)payload.Length }, 0, 2);
-                await stream.WriteAsync(payload, 0, payload.Length);
+                await this.connection.SendAsync(new byte[] { 0x81, (byte)payload.Length });
+                await this.connection.SendAsync(payload);
+            }
+        }
+
+        public async Task SendMessage(string message)
+        {
+            if (this.connection != null)
+            {
+                var payload = Encoding.UTF8.GetBytes(message);
+                await this.connection.SendAsync(new byte[] { 0x81, (byte)payload.Length });
+                await this.connection.SendAsync(payload);
             }
         }
     }

@@ -7,6 +7,17 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+/*  WebSocket Message Schema
+ *  
+ *  INCOMING EVENTS
+ *  ---------------
+ *  Event/Arg1Key:Arg1Value/Arg2Key:Arg2Value/...:...
+ *  
+ *  Connect To Network
+ *  NetworkConnect/Callsign:XXX/TypeCode:XXX/SelCal:XXX
+ 
+ */
+
 namespace vPilotExtended
 {
     public class vPilotExtended: IPlugin
@@ -17,18 +28,64 @@ namespace vPilotExtended
 
         public string Name => "vPilot Extended";
 
-        public async void Initialize(IBroker broker)
+        public void Initialize(IBroker broker)
         {
             this.broker = broker;
-            this.server = new Server(this.broker);
-            await this.server.Initialize();
-            this.broker.PostDebugMessage("[vPilot Extended " + this.Version.ToString() + "] Extension loaded");
 
             this.broker.NetworkConnected += new EventHandler<NetworkConnectedEventArgs>(this.NetworkConnectedEvent);
             this.broker.BroadcastMessageReceived += new EventHandler<BroadcastMessageReceivedEventArgs>(this.BroadcastMessageReceivedEvent);
+            this.broker.PrivateMessageReceived += new EventHandler<PrivateMessageReceivedEventArgs>(this.PrivateMessageReceivedEvent);
+            this.broker.RadioMessageReceived += new EventHandler<RadioMessageReceivedEventArgs>(this.RadioMessageReceivedEvent);
+            this.broker.PostDebugMessage("vPE events connected");
+
+            this.server = new Server(this.broker, this.WebSocketMessageReceivedEvent);
+            _ = this.server.Initialize(); // use discard operator to suppress warning
+            this.broker.PostDebugMessage("vPE server launched");
+            this.broker.PostDebugMessage("vPilot Extended loaded");
         }
 
-        public void NetworkConnectedEvent(object sender, NetworkConnectedEventArgs e)
+        public void WebSocketMessageReceivedEvent(string message)
+        {
+            string type = "<null>";
+            Dictionary<string, string> arguments = new Dictionary<string, string>();
+
+            string[] splitMessage = message.Split('/');
+            for (int i = 0; i < splitMessage.Length; i++)
+            {
+                string[] splitString = splitMessage[i].Split(':');
+
+                if (splitString.Length == 1)
+                {
+                    type = splitString[0].ToLower();
+                } else
+                {
+                    arguments.Add(splitString[0].ToLower(), splitString[1]);
+                }
+            }
+
+            this.broker.PostDebugMessage("[WebSocket] Event: " + type + "; Args: " + string.Join(",", arguments));
+
+            //switch (type)
+            //{
+              //  case "networkconnect":
+                //    this.broker.RequestConnect(arguments["callsign"], arguments["typecode"], arguments["selcal"]);
+                  //  break;
+            //};
+
+            //this.broker.RequestConnect
+        }
+
+        public async void NetworkConnectedEvent(object sender, NetworkConnectedEventArgs e)
+        {
+            await this.server.SendMessage("NetworkConnectionEstablished/CallSign:" + e.Callsign +  "/TypeCode:" + e.TypeCode + "/SelCal Code:" + e.SelcalCode);
+        }
+
+        public void PrivateMessageReceivedEvent(object sender, PrivateMessageReceivedEventArgs e)
+        {
+
+        }
+
+        public void RadioMessageReceivedEvent(object sender, RadioMessageReceivedEventArgs e)
         {
 
         }

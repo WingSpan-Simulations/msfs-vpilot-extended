@@ -16,3 +16,4 @@ D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Exten
 D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\obj\Release\vPilot Extended.csproj.CopyComplete
 D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\obj\Release\vPilot Extended.dll
 D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\obj\Release\vPilot Extended.pdb
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\vPilot Extended.dll.config
