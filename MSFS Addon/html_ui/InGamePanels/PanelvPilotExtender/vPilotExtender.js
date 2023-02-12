@@ -108,33 +108,6 @@ class vPilotExtender extends TemplateElement {
             return;
         }
 
-        //this.m_MainDisplay = document.querySelector("#MainDisplay");
-        //this.m_MainDisplay.classList.add("hidden");
-
-        //this.m_Footer = document.querySelector("#Footer");
-        //this.m_Footer.classList.add("hidden");
-
-        //this.iframeElement = document.getElementById("vPEPanelIframe");
-        //this.ingameUi = this.querySelector('ingame-ui');
-
-        /*if (this.ingameUi) {
-            this.ingameUi.addEventListener("panelActive", (e) => {
-                console.log('panelActive');
-                this.updateImage();
-            });
-            this.ingameUi.addEventListener("panelInactive", (e) => {
-                console.log('panelInactive');
-                this.iframeElement.src = '';
-            });
-            this.ingameUi.addEventListener("onResizeElement", () => {
-                //this.updateImage();
-            });
-            this.ingameUi.addEventListener("dblclick", () => {
-                if (this.m_Footer) {
-                    this.m_Footer.classList.remove("hidden");
-                }
-            });
-        }*/
         this.started = true;
     }
     disconnectedCallback() {
@@ -145,5 +118,5 @@ class vPilotExtender extends TemplateElement {
     }
 }
 
-window.customElements.define("ingamepanel-vpe", IngamePanelvPEPanel);
+window.customElements.define("ingamepanel-vpe", vPilotExtender);
 checkAutoload();
