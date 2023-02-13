@@ -1,7 +1,8 @@
 import React from "react";
 
-export class AwaitingConnection extends React.Component {
-  constructor(props) {
+type AwaitingConnectionProps = {}
+export class AwaitingConnection extends React.Component<AwaitingConnectionProps> {
+  constructor(props: AwaitingConnectionProps) {
     super(props);
     this.state = {};
   }

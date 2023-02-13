@@ -1,8 +1,16 @@
 {
     "compilerOptions": {
-        "typeRoots": [
-            "/types/msfs/"
-        ]
+        "target": "ESNext",
+        "module": "commonjs",
+        "strict": true,
+        "sourceMap": true,
+        "noImplicitAny": true,
+        "baseUrl": "../",
+        "resolveJsonModule": true,
+        "moduleResolution": "node",
+        "allowSyntheticDefaultImports": true,
+        "jsx": "react",
+        "outDir": "panel-src/build"
     },
     "include": ["./panel-src/**/*"],
     "exclude": ["types"]
