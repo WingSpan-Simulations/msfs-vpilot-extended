@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "target": "ESNext",
+    "baseUrl": "../",
+    "resolveJsonModule": true,
+    "typeRoots": [
+      "../types/msfs"
+    ],
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "jsx": "react"
+  },
+}
