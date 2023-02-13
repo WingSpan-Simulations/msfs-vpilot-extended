@@ -1,6 +1,9 @@
 /MSFS Addon/Build/_Temp
 /MSFS Addon/Build/Packages
 /MSFS Addon/out
+/MSFS Addon/panel-src/build/
+/MSFS Addon/panel-src/node_modules
+/MSFS Addon/panel-src/.rollup.cache/
 /vPilot Plugin/.vs
 /vPilot Plugin/obj/
 /vPilot Plugin/bin/Debug

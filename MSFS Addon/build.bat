@@ -104,6 +104,8 @@ EXIT /B 0
         "build.bat"
         "out"
         "build"
+        "panel-src"
+        "old"
     ) DO (
         IF not "x!path:%%~G=!"=="x!path!" set "%fileBlacklisted=true"
     )
