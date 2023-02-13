@@ -1,4 +1,4 @@
-/// <reference types="../../../types/msfstypes/JS/common" />
+/// <reference path="../../../types/msfs/common.d.ts"/>
 
 import React from "react";
 import ReactDOM from "react-dom";
@@ -15,20 +15,14 @@ class vPEPanelReact extends React.Component<vPEPanelReactProps> {
   }
 }
 
-interface vPEPanel {
-  panelActive: boolean;
-  started: boolean;
-  ingameUi: any;
-  busy: boolean;
-}
 class vPEPanel extends TemplateElement {
+  panelActive = false;
+  started = false;
+  ingameUi: any = null;
+  busy = false;
+
   constructor() {
     super();
-
-    this.panelActive = false;
-    this.started = false;
-    this.ingameUi = null;
-    this.busy = false;
 
     console.log("VPE CONSTRUCTOR CALLED");
   }
@@ -38,7 +32,7 @@ class vPEPanel extends TemplateElement {
     this.ingameUi = this.querySelector("ingame-ui");
     console.log("Rendering");
 
-    // document.getElementById("Footer").append("Texting Texting 123");
+    document.getElementById("Footer")?.append("Texting Texting 123");
 
     ReactDOM.render(
       React.createElement(vPEPanelReact),
