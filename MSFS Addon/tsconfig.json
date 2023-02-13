@@ -1,0 +1,9 @@
+{
+    "compilerOptions": {
+        "typeRoots": [
+            "/types/msfs/"
+        ]
+    },
+    "include": ["./panel-src/**/*"],
+    "exclude": ["types"]
+}
