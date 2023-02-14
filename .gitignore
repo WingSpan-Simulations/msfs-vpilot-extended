@@ -6,6 +6,7 @@
 /MSFS Addon/build/_Temp
 /MSFS Addon/build/Packages
 /MSFS Addon/out
+/MSFS Addon/package-lock.json
 
 /vPilot Plugin/.vs
 /vPilot Plugin/obj/
