@@ -5,20 +5,21 @@ IF EXIST out/layout.json (
     DEL /f out\layout.json 
 )
 
-IF EXIST InGamePanels (
-    rmdir /S /Q InGamePanels
-    mkdir InGamePanels
-)
-
 IF EXIST out (
     rmdir /S /Q out
     mkdir out
 )
 
-echo Launching MSFS to create panel SPB
-"%MSFS_SDK%\Tools\bin\fspackagetool.exe" -nopause "build\meqolo-vpilot-extender.xml"
-copy "build\Packages\meqolo-vpilot-extender\build\meqolo-vpilot-extender.spb" "InGamePanels" 
+IF NOT EXIST InGamePanels\meqolo-vpilot-extender.spb (
+    echo Launching MSFS to create panel SPB
+    "%MSFS_SDK%\Tools\bin\fspackagetool.exe" -nopause "build\meqolo-vpilot-extender.xml"
+    copy "build\Packages\meqolo-vpilot-extender\build\meqolo-vpilot-extender.spb" "InGamePanels" 
 
+    IF EXIST InGamePanels (
+        rmdir /S /Q InGamePanels
+        mkdir InGamePanels
+    )
+)
 
 echo ^{ > out/layout.json
 echo    "content": [ >> out/layout.json
@@ -99,9 +100,14 @@ EXIT /B 0
 :CHECK_FILE_BLACKLIST path
     set "%fileBlacklisted=false"
     FOR %%G IN (
+        "tsconfig.json"
         "layout.json"
         "manifest.json"
-        "build.bat"
+        "package-lock.json"
+        "package.json"
+        "node_modules"
+        "types"
+        ".bat"
         "out"
         "build"
         "panel-src"

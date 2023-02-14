@@ -1,9 +1,13 @@
-/MSFS Addon/Build/_Temp
-/MSFS Addon/Build/Packages
+/MSFS Addon/node_modules/
+/MSFS Addon/types/
+
+/MSFS Addon/.rollup.cache/
+/MSFS Addon/build/tsconfig.tsbuildinfo
+/MSFS Addon/build/_Temp
+/MSFS Addon/build/Packages
 /MSFS Addon/out
-/MSFS Addon/panel-src/build/
-/MSFS Addon/node_modules
-/MSFS Addon/panel-src/.rollup.cache/
+/MSFS Addon/package-lock.json
+
 /vPilot Plugin/.vs
 /vPilot Plugin/obj/
 /vPilot Plugin/bin/Debug
