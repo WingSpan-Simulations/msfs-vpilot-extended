@@ -2,54 +2,39 @@
 <html>
 
     <head>
+        <title></title>
         <meta charset="utf-8" />
         <link rel="stylesheet" href="/SCSS/common.css" />
-        <link rel="stylesheet" href="vPEPanel.css" />
 
         <script type="text/javascript" src="/JS/coherent.js"></script>
         <script type="text/javascript" src="/JS/common.js"></script>
         <script type="text/javascript" src="/JS/dataStorage.js"></script>
+        <script type="text/javascript" src="/JS/Types.js"></script>
+        <script type="text/javascript" src="/JS/Services/GenericDataListener.js"></script>
         <script type="text/javascript" src="/JS/buttons.js"></script>
+        <script type="text/javascript" src="/JS/simvar.js"></script>
+        <script type="text/javascript" src="/JS/SimPlane.js"></script>
+        <script type="text/javascript" src="/JS/Avionics.js"></script>
+        <script type="text/javascript" src="/JS/NetBingMap.js"></script>
         <script type="text/javascript" src="/JS/Services/ToolBarPanels.js"></script>
         <script type="text/javascript" src="/Pages/VCockpit/Instruments/Shared/BaseInstrument.js"></script>
 
-        <link rel="import" href="/templates/NewPushButton/NewPushButton.html" />
-        <link rel="import" href="/templates/ToggleButton/toggleButton.html" />
-        <link rel="import" href="/templates/tabMenu/tabMenu.html" />
         <link rel="import" href="/templates/ingameUi/ingameUi.html" />
         <link rel="import" href="/templates/ingameUiHeader/ingameUiHeader.html" />
-        <link rel="import" href="/templates/NewListButton/NewListButton.html" />
-        <link rel="import" href="/templates/radioListButton/radioListButton.html" />
+        <link rel="import" href="/templates/uiInput/uiInput.html" />
+        <link rel="import" href="/templates/Tags/TagsContainer/TagsContainer.html" />
+        <link rel="import" href="/templates/Tags/TagsElement/TagsElement.html" />
+        <link rel="import" href="/templates/virtualScroll/virtualScroll.html" />
+        <link rel="import" href="/templates/checkbox/checkbox.html" />
+        <link rel="import" href="/templates/NewPushButton/NewPushButton.html" />
+        <link rel="import" href="/templates/ToggleButton/ToggleButton.html" />
 
-        <!-- <script type="text/javascript" src="Libraries/msfssdk.js"></script> -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script type="text/javascript" src="msfssdk.js"></script>
         <script type="text/javascript" src="vPEPanel.js"></script>
     </head>
 
-    <body class="border-box">
-        <ingamepanel-custom>
-            <ingame-ui id="vPEPanel" panel-id="PANEL_VPILOT_EXTENDER" title="" class="ingameUiFrame panelInvisible"
-                content-fit="true" min-width="160" min-height="90">
-
-                <script type="text/html" id="vPEPanel">
-                    <div id="PanelContent"></div>
-                </script>
-
-                <!-- <div id="awaiting-connection">
-                    Awaiting vPilot connection...
-                </div> -->
-
-                <!-- <radio-list-button class="condensed-interactive panel-option-element" id="pageSelection"
-          data-input-group="RADIO-LIST-BUTTON" tabindex="-1">
-          <new-push-button class="condensed-interactive small selected" title="FLIGHT PLAN"
-            data-input-group="NEW-PUSH-BUTTON" tabindex="1"></new-push-button>
-          <new-push-button class="condensed-interactive small" title="AIR TRAFFIC CONTROL"
-            data-input-group="NEW-PUSH-BUTTON" tabindex="1"></new-push-button>
-        </radio-list-button>
-
-        <section id="MainDisplay">header</section>-->
-                <section id="Footer">TESTING FOOTER</section>
-            </ingame-ui>
-        </ingamepanel-custom>
+    <body id="vPEPanel" class="border-box">
     </body>
 
 </html>

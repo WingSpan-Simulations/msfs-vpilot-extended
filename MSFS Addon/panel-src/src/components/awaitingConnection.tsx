@@ -4,7 +4,7 @@ export class AwaitingConnection extends DisplayComponent<any> {
     public render(): VNode {
         console.log("Rendering awaiting connection")
         return (
-            <div class='awaiting-connection'>Awaiting Connection...</div>
+            <div class='awaiting-connection'><ui-marquee class="title"><span>Awaiting Connection...</span></ui-marquee></div>
         );
     }
 }

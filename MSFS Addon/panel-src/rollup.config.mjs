@@ -3,13 +3,13 @@ import resolve from '@rollup/plugin-node-resolve';
 import css from 'rollup-plugin-import-css';
 
 export default {
-    input: 'src/vPEPanel.tsx',
+    input: 'panel-src/src/vPEPanel.tsx',
     output: {
-        file: '../html_ui/InGamePanels/vPEPanel/vPEPanel.js',
+        file: 'html_ui/InGamePanels/vPEPanel/vPEPanel.js',
         format: 'iife',
-        // globals: { 'msfssdk': 'msfssdk'  }
+        globals: { 'msfssdk': 'msfssdk'  }
     },
-    // external: ['msfssdk', 'msfstypes'],
+    external: ['msfssdk', 'msfstypes'],
     plugins: [
         css({ output: 'vPEPanel.css '}),  resolve(),  typescript()]
 }
