@@ -1,0 +1,39 @@
+{
+  "content": [
+    {
+      "path": "html_ui/icons/toolbar/ICON_TOOLBAR_MEQOLO_VPILOT_EXTENDER.svg",
+      "size": 1751,
+      "date": 133206295276055267
+    },
+    {
+      "path": "html_ui/InGamePanels/vPEPanel/vPEPanel.css",
+      "size": 1317,
+      "date": 133208863963619231
+    },
+    {
+      "path": "html_ui/InGamePanels/vPEPanel/vPEPanel.html",
+      "size": 2388,
+      "date": 133208869927076094
+    },
+    {
+      "path": "html_ui/InGamePanels/vPEPanel/vPEPanel.js",
+      "size": 2345,
+      "date": 133208868643275649
+    },
+    {
+      "path": "html_ui/InGamePanels/vPEPanel/vendor/msfssdk.js",
+      "size": 3031059,
+      "date": 133208073358195814
+    },
+    {
+      "path": "html_ui/InGamePanels/vPEPanel/vendor/tailwind.css",
+      "size": 0,
+      "date": 133208869712164878
+    },
+    {
+      "path": "InGamePanels/meqolo-vpilot-extender.spb",
+      "size": 696,
+      "date": 133207145566997641
+    }
+  ]
+}
