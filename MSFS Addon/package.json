@@ -5,9 +5,9 @@
   "main": "index.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build:msfstypes": "echo Building MSFS types && buildtypes",
+    "build:msfstypes": "echo Building MSFS types && build --types",
     "build:msfstype-conditional": "IF NOT EXIST types\\msfstypes (npm run build:msfstypes)",
-    "build:spb": "'%MSFS_SDK%\\Tools\\bin\\fspackagetool.exe' -nopause 'build\\meqolo-vpilot-extender.xml' && copy 'build\\Packages\\meqolo-vpilot-extender\\build\\meqolo-vpilot-extender.spb' 'src\\InGamePanels'",
+    "build:spb": "build --spb",
     "build:panel": "npx rollup -c panel/rollup.config.mjs",
     "build:css": "npx tailwindcss -o ./src/html_ui/InGamePanels/vPEPanel/vendor/tailwind.css",
     "build": "npm run build:msfstype-conditional && echo Building panels && npm run build:panel && echo Building tailwind css && npm run build:css && echo Building layout.json && layoutBuild.exe src/layout.json"
@@ -19,6 +19,7 @@
     "@rollup/plugin-commonjs": "^24.0.1",
     "@rollup/plugin-node-resolve": "^15.0.1",
     "@rollup/plugin-typescript": "^11.0.0",
+    "@types/websocket": "^1.0.5",
     "rollup": "^2.79.1",
     "rollup-plugin-import-css": "^3.1.0",
     "tailwindcss": "^3.2.6",
