@@ -1,14 +1,36 @@
-import { EventBus, Publisher } from "msfssdk";
+import { EventBus, EventSubscriber, Publisher } from "msfssdk";
 
 const websocketUri = "ws://127.0.0.1:8080/";
+
+/* 	INCOMING MESSAGES
+
+NetworkConnectionEstablished/CallSign:###/TypeCode:###/SelCal Code:###
+
+======================================================================
+	OUTGOING MESSAGES
+ConnectToNetwork/Callsign:###/TypeCode:###/SelCal Code:###
+
+*/
+
+interface NetworkConnect {
+	callsign: string;
+	aircraft: string;
+	selcal: string;
+};
 
 export interface BackendEvents {
 	establishedConnection: boolean;
 	timeToRetry: number;
+	callsign: string | undefined;
+}
+
+export interface FrontendEvents {
+	connectToNetwork: NetworkConnect;
 }
 
 export interface Backend {
-	publisher: Publisher<BackendEvents>
+	publisher: Publisher<BackendEvents>;
+	subscriber: EventSubscriber<FrontendEvents>;
 
 	websocket: WebSocket;
 	awaitingConnection: boolean;
@@ -19,8 +41,17 @@ export class Backend {
 	constructor(eventBus: EventBus) {
 		this.websocket;
 		this.publisher = eventBus.getPublisher<BackendEvents>();
+		this.subscriber = eventBus.getSubscriber<FrontendEvents>();
+
+		this.handleFrontEndEvents()
 
 		this.createWebsocket();
+	}
+
+	handleFrontEndEvents() {
+		this.subscriber.on("connectToNetwork").handle((values) => {
+			this.websocket.send(`ConnectToNetwork/Callsign:${values.callsign}/TypeCode:${values.aircraft}/SelCal Code:${values.selcal}`)
+		})
 	}
 
 	handleEstablishedConnection(e: any) {
@@ -29,7 +60,27 @@ export class Backend {
 	}
 
 	handleMessage(e: any) {
-		console.log(`WebSocket Message: ${e.data}`);
+		let splitMessage: Array<string> = e.data.split("/")
+		let type: string | undefined;
+		let args: { [key: string]: string } = {};
+
+		splitMessage.forEach((stringPair) => {
+			let strings = stringPair.split(":")
+			if (strings.length == 1) {
+				type = strings[0]
+			} else {
+				args[strings[0]] = strings[1];
+			}
+		})
+
+
+		console.log(`Type: ${type}, Args: ${args}`)
+
+		switch (type) {
+			case "NetworkConnectionEstablished":
+				console.log(args)
+				this.publisher.pub("callsign", args["CallSign"])
+		}
 	}
 
 	handleError(e: any) {

@@ -17,9 +17,18 @@
 	text-align: center;
 }
 
+ui-input.error > .default-input {
+  border-color: #EF4444;
+}
+
 ingame-ui#vPE_Frame {
   width: 100%;
   height: 100%;
+}
+
+.error-bg {
+  background-color: #B91C1C;
+  width: 100%
 }
 
 #main {

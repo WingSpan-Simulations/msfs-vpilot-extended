@@ -7,18 +7,18 @@
     },
     {
       "path": "html_ui/InGamePanels/vPEPanel/vPEPanel.css",
-      "size": 1253,
-      "date": 133208876788483917
+      "size": 1382,
+      "date": 133212415951975917
     },
     {
       "path": "html_ui/InGamePanels/vPEPanel/vPEPanel.html",
-      "size": 2388,
-      "date": 133208869927076094
+      "size": 2466,
+      "date": 133210668948339067
     },
     {
       "path": "html_ui/InGamePanels/vPEPanel/vPEPanel.js",
-      "size": 5981,
-      "date": 133208980045174837
+      "size": 18733,
+      "date": 133213305681607505
     },
     {
       "path": "html_ui/InGamePanels/vPEPanel/vendor/msfssdk.js",
@@ -27,8 +27,8 @@
     },
     {
       "path": "html_ui/InGamePanels/vPEPanel/vendor/tailwind.css",
-      "size": 12640,
-      "date": 133208969715139050
+      "size": 13865,
+      "date": 133212457611856610
     },
     {
       "path": "InGamePanels/meqolo-vpilot-extender.spb",
