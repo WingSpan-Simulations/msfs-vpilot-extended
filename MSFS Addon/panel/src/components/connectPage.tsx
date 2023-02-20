@@ -1,5 +1,6 @@
 import { FSComponent, DisplayComponent, VNode, Fragment, ComponentProps, NodeReference, Subject, Publisher } from "msfssdk";
 import { FrontendEvents } from "../vPEBackend";
+import { InputBar } from "./inputBar";
 
 
 const alphanumericRegex = /^[A-Za-z0-9]*$/
@@ -33,9 +34,9 @@ export interface ConnectPage {
 
     pageRef: NodeReference<HTMLDivElement>
     errorRef: NodeReference<HTMLDivElement>
-    callsignRef: NodeReference<TemplateElement>
-    aircraftRef: NodeReference<TemplateElement>
-    selcalRef: NodeReference<TemplateElement>
+    callsignRef: NodeReference<InputBar>
+    aircraftRef: NodeReference<InputBar>
+    selcalRef: NodeReference<InputBar>
     connectRef: NodeReference<TemplateElement>
 }
 export class ConnectPage extends DisplayComponent<ConnectProps> {
@@ -53,10 +54,10 @@ export class ConnectPage extends DisplayComponent<ConnectProps> {
 
         this.pageRef = FSComponent.createRef<HTMLDivElement>();
         this.errorRef = FSComponent.createRef<HTMLDivElement>();
-        this.callsignRef = FSComponent.createRef<TemplateElement>();
-        this.aircraftRef = FSComponent.createRef<TemplateElement>();
-        this.selcalRef = FSComponent.createRef<TemplateElement>();
-        this.connectRef = FSComponent.createRef<TemplateElement>();
+        this.callsignRef = FSComponent.createRef<any>();
+        this.aircraftRef = FSComponent.createRef<any>();
+        this.selcalRef = FSComponent.createRef<any>();
+        this.connectRef = FSComponent.createRef<any>();
     }
 
     public hide() {
@@ -70,55 +71,11 @@ export class ConnectPage extends DisplayComponent<ConnectProps> {
     }
 
     public onAfterRender(node: VNode): void {
-        this.callsignRef.instance.addEventListener("input", (ev: any) => {
-            if (ev.target._valueStr !== undefined) {
-                this.callsign = ev.target._valueStr;
-                let errors = { ...this.errors.get() }
-
-                errors.callsign = this.checkInputErrors(this.callsign, this.callsignRef, [
-                    (input: string) => input.length < 2 && inputErrors.callsign.tooShort,
-                    (input: string) => input.length > 7 && inputErrors.callsign.tooLong,
-                    (input: string) => alphanumericRegex.test(input) !== true && inputErrors.callsign.alphanumeric
-                ])
-
-                this.errors.set(errors)
-            }
-        })
-
-        this.aircraftRef.instance.addEventListener("input", (ev: any) => {
-            if (ev.target._valueStr !== undefined) {
-                this.aircraft = ev.target._valueStr;
-                let errors = { ...this.errors.get() }
-
-                errors.aircraft = this.checkInputErrors(this.aircraft, this.aircraftRef, [
-                    (input: string) => input.length <= 0 && inputErrors.aircraft.tooShort,
-                    (input: string) => input.length > 4 && inputErrors.aircraft.tooLong,
-                    (input: string) => alphanumericRegex.test(input) !== true && inputErrors.aircraft.alphanumeric
-                ])
-
-                this.errors.set(errors)
-            }
-        })
-
-        this.selcalRef.instance.addEventListener("input", (ev: any) => {
-            if (ev.target._valueStr !== undefined) {
-                this.selcal = ev.target._valueStr;
-                let errors = { ...this.errors.get() }
-
-                errors.selcal = this.checkInputErrors(this.selcal, this.selcalRef, [
-                    (input: string) => (input.length != 0 || selcalRegex.test(this.selcal) !== true) && inputErrors.selcal
-                ])
-
-                this.errors.set(errors)
-            }
-        })
-
         this.connectRef.instance.addEventListener("click", (ev: any) => { this.connectToServer() })
 
-        this.errors.sub((errors: any) => { this.renderErrors() })
-
-        this.setInputColours(this.callsignRef)
-        this.setInputColours(this.aircraftRef)
+        this.errors.sub(() => { this.renderErrors() })
+        this.setInputColours(this.callsignRef.instance.getInputBar())
+        this.setInputColours(this.aircraftRef.instance.getInputBar())
         this.renderErrors()
     }
 
@@ -156,11 +113,11 @@ export class ConnectPage extends DisplayComponent<ConnectProps> {
 
         let errorHolder = this.errorRef.instance.querySelector("#errorHolder")
         if (errorHolder) {
-            errorHolder.innerHTML = errors.map(error => `<span>- ${error}</span>`).join("\n")
+            errorHolder.innerHTML = errors.map(error => `<span class="text-base">- ${error}</span>`).join("\n")
         }
     }
 
-    setInputColours(ref: NodeReference<TemplateElement>, remove?: boolean) {
+    setInputColours(ref: NodeReference<any>, remove?: boolean) {
         if (ref.instance.classList.contains("error") !== true && remove !== true) {
             ref.instance.classList.add("error")
         } else if (ref.instance.classList.contains("error") === true && remove === true) {
@@ -171,7 +128,6 @@ export class ConnectPage extends DisplayComponent<ConnectProps> {
     connectToServer() {
         let errors = flatten(Object.values(this.errors.get()));
         if (errors.length == 0) {
-            console.log("CLICKED")
             this.props.publisher.pub("connectToNetwork", {
                 callsign: this.callsign,
                 aircraft: this.aircraft,
@@ -180,11 +136,58 @@ export class ConnectPage extends DisplayComponent<ConnectProps> {
         }
     }
 
+    transformInput(input: string, maxLength: number, regex: RegExp): string {
+        let newInput = input.toUpperCase().slice(0, maxLength);
+
+        if (regex.test(newInput) !== true) {
+            newInput = newInput.slice(0, newInput.length - 1)
+        }
+
+        return newInput
+    }
+
+    onCallsignInput(input: string, ref: NodeReference<any>) {
+        this.callsign = input
+        let errors = { ...this.errors.get() }
+
+        errors.callsign = this.checkInputErrors(this.callsign, ref, [
+            (input: string) => input.length < 2 && inputErrors.callsign.tooShort,
+            (input: string) => input.length > 7 && inputErrors.callsign.tooLong,
+            (input: string) => alphanumericRegex.test(input) !== true && inputErrors.callsign.alphanumeric
+        ])
+
+        this.errors.set(errors)
+    }
+
+    onAircraftInput(input: string, ref: NodeReference<any>) {
+        this.aircraft = input
+        let errors = { ...this.errors.get() }
+
+        errors.aircraft = this.checkInputErrors(this.aircraft, ref, [
+            (input: string) => input.length <= 0 && inputErrors.aircraft.tooShort,
+            (input: string) => input.length > 4 && inputErrors.aircraft.tooLong,
+            (input: string) => alphanumericRegex.test(input) !== true && inputErrors.aircraft.alphanumeric
+        ])
+
+        this.errors.set(errors)
+    }
+
+    onSelcalInput(input: string, ref: NodeReference<any>) {
+        this.selcal = input
+        let errors = { ...this.errors.get() }
+
+        errors.selcal = this.checkInputErrors(this.selcal, ref, [
+            (input: string) => (input.length != 0 || selcalRegex.test(this.selcal) !== true) && inputErrors.selcal
+        ])
+
+        this.errors.set(errors)
+    }
+
     public render(): VNode {
         return (
             <div class="hidden mx-2 pt-2" ref={this.pageRef}>
                 <div class="grid grid-cols-1 justify-items-center pb-2">
-                    <span class="font-bold text-base">Connect to VATSIM</span>
+                    <span class="font-bold">Connect to network</span>
                 </div>
 
                 <hr class="pb-1" />
@@ -196,15 +199,15 @@ export class ConnectPage extends DisplayComponent<ConnectProps> {
 
                 <div class="grid grid-cols-4 mt-4">
                     <p class="col-span-2 font-semibold">Callsign</p>
-                    <ui-input ref={this.callsignRef} class="col-span-2" type="text" no-tooltip no-key-navigation not-pad-interactive idevent="0" id="callsign" />
+                    <InputBar ref={this.callsignRef} onInput={this.onCallsignInput.bind(this)} transformInput={(input) => { return this.transformInput(input, 7, alphanumericRegex) }} id="callsign" class="col-span-2" />
                 </div>
                 <div class="grid grid-cols-4 mt-2">
                     <p class="col-span-2 font-semibold">Aircraft Code</p>
-                    <ui-input ref={this.aircraftRef} class="col-span-2" type="text" no-tooltip no-key-navigation not-pad-interactive idevent="0" id="aircraftCode" />
+                    <InputBar ref={this.aircraftRef} onInput={this.onAircraftInput.bind(this)} transformInput={(input) => { return this.transformInput(input, 4, alphanumericRegex) }} id="aircraftCode" class="col-span-2" />
                 </div>
                 <div class="grid grid-cols-4 mt-2">
                     <p class="col-span-2 font-semibold">SelCal Code</p>
-                    <ui-input ref={this.selcalRef} class="col-span-2" type="text" no-tooltip no-key-navigation not-pad-interactive idevent="0" id="selcalCode" />
+                    <InputBar ref={this.selcalRef} onInput={this.onSelcalInput.bind(this)} transformInput={(input) => { return this.transformInput(input, 5, selcalRegex) }} id="callsign" class="col-span-2" />
                 </div>
 
                 <new-push-button ref={this.connectRef} class="w-auto mt-4 mx-4 text-center" title="Connect" />

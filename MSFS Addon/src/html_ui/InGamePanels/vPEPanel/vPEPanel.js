@@ -37,6 +37,36 @@
         }
     }
 
+    class InputBar extends msfssdk.DisplayComponent {
+        constructor(props) {
+            super(props);
+            this.ref = msfssdk.FSComponent.createRef();
+        }
+        onAfterRender(node) {
+            this.ref.instance.addEventListener("input", () => {
+                let input = this.ref.instance._valueStr;
+                if (input !== undefined) {
+                    if (this.props.transformInput) {
+                        input = this.props.transformInput(input);
+                        this.ref.instance.setValue(input);
+                    }
+                    if (this.props.onInput) {
+                        this.props.onInput(input, this.ref);
+                    }
+                }
+            });
+        }
+        getInputBar() {
+            return this.ref;
+        }
+        setInput(input) {
+            this.ref.instance.setValue(input);
+        }
+        render() {
+            return (msfssdk.FSComponent.buildComponent("ui-input", { ref: this.ref, class: this.props.class, id: this.props.id, type: "text", "no-tooltip": true, "no-key-navigation": true, "not-pad-interactive": true, idevent: "0" }));
+        }
+    }
+
     const alphanumericRegex = /^[A-Za-z0-9]*$/;
     const selcalRegex = /^[A-Za-z]{2}-[A-Za-z]{2}$/;
     const inputErrors = {
@@ -82,45 +112,12 @@
             }
         }
         onAfterRender(node) {
-            this.callsignRef.instance.addEventListener("input", (ev) => {
-                if (ev.target._valueStr !== undefined) {
-                    this.callsign = ev.target._valueStr;
-                    let errors = Object.assign({}, this.errors.get());
-                    errors.callsign = this.checkInputErrors(this.callsign, this.callsignRef, [
-                        (input) => input.length < 2 && inputErrors.callsign.tooShort,
-                        (input) => input.length > 7 && inputErrors.callsign.tooLong,
-                        (input) => alphanumericRegex.test(input) !== true && inputErrors.callsign.alphanumeric
-                    ]);
-                    this.errors.set(errors);
-                }
-            });
-            this.aircraftRef.instance.addEventListener("input", (ev) => {
-                if (ev.target._valueStr !== undefined) {
-                    this.aircraft = ev.target._valueStr;
-                    let errors = Object.assign({}, this.errors.get());
-                    errors.aircraft = this.checkInputErrors(this.aircraft, this.aircraftRef, [
-                        (input) => input.length <= 0 && inputErrors.aircraft.tooShort,
-                        (input) => input.length > 4 && inputErrors.aircraft.tooLong,
-                        (input) => alphanumericRegex.test(input) !== true && inputErrors.aircraft.alphanumeric
-                    ]);
-                    this.errors.set(errors);
-                }
-            });
-            this.selcalRef.instance.addEventListener("input", (ev) => {
-                if (ev.target._valueStr !== undefined) {
-                    this.selcal = ev.target._valueStr;
-                    let errors = Object.assign({}, this.errors.get());
-                    errors.selcal = this.checkInputErrors(this.selcal, this.selcalRef, [
-                        (input) => (input.length != 0 || selcalRegex.test(this.selcal) !== true) && inputErrors.selcal
-                    ]);
-                    this.errors.set(errors);
-                }
-            });
             this.connectRef.instance.addEventListener("click", (ev) => { this.connectToServer(); });
-            this.errors.sub((errors) => { this.renderErrors(); });
-            this.setInputColours(this.callsignRef);
-            this.setInputColours(this.aircraftRef);
+            this.errors.sub(() => { this.renderErrors(); });
+            this.setInputColours(this.callsignRef.instance.getInputBar());
+            this.setInputColours(this.aircraftRef.instance.getInputBar());
             this.renderErrors();
+            this.aircraftRef.instance.setInput(SimVar.GetSimVarValue("ATC MODEL", "string").slice(3, 7));
         }
         checkInputErrors(input, ref, errorChecks) {
             let errors = [];
@@ -152,7 +149,7 @@
             }
             let errorHolder = this.errorRef.instance.querySelector("#errorHolder");
             if (errorHolder) {
-                errorHolder.innerHTML = errors.map(error => `<span>- ${error}</span>`).join("\n");
+                errorHolder.innerHTML = errors.map(error => `<span class="text-base">- ${error}</span>`).join("\n");
             }
         }
         setInputColours(ref, remove) {
@@ -166,7 +163,6 @@
         connectToServer() {
             let errors = flatten(Object.values(this.errors.get()));
             if (errors.length == 0) {
-                console.log("CLICKED");
                 this.props.publisher.pub("connectToNetwork", {
                     callsign: this.callsign,
                     aircraft: this.aircraft,
@@ -174,23 +170,58 @@
                 });
             }
         }
+        transformInput(input, maxLength, regex) {
+            let newInput = input.toUpperCase().slice(0, maxLength);
+            if (regex.test(newInput) !== true) {
+                newInput = newInput.slice(0, newInput.length - 1);
+            }
+            return newInput;
+        }
+        onCallsignInput(input, ref) {
+            this.callsign = input;
+            let errors = Object.assign({}, this.errors.get());
+            errors.callsign = this.checkInputErrors(this.callsign, ref, [
+                (input) => input.length < 2 && inputErrors.callsign.tooShort,
+                (input) => input.length > 7 && inputErrors.callsign.tooLong,
+                (input) => alphanumericRegex.test(input) !== true && inputErrors.callsign.alphanumeric
+            ]);
+            this.errors.set(errors);
+        }
+        onAircraftInput(input, ref) {
+            this.aircraft = input;
+            let errors = Object.assign({}, this.errors.get());
+            errors.aircraft = this.checkInputErrors(this.aircraft, ref, [
+                (input) => input.length <= 0 && inputErrors.aircraft.tooShort,
+                (input) => input.length > 4 && inputErrors.aircraft.tooLong,
+                (input) => alphanumericRegex.test(input) !== true && inputErrors.aircraft.alphanumeric
+            ]);
+            this.errors.set(errors);
+        }
+        onSelcalInput(input, ref) {
+            this.selcal = input;
+            let errors = Object.assign({}, this.errors.get());
+            errors.selcal = this.checkInputErrors(this.selcal, ref, [
+                (input) => (input.length != 0 || selcalRegex.test(this.selcal) !== true) && inputErrors.selcal
+            ]);
+            this.errors.set(errors);
+        }
         render() {
             return (msfssdk.FSComponent.buildComponent("div", { class: "hidden mx-2 pt-2", ref: this.pageRef },
                 msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-1 justify-items-center pb-2" },
-                    msfssdk.FSComponent.buildComponent("span", { class: "font-bold text-base" }, "Connect to VATSIM")),
+                    msfssdk.FSComponent.buildComponent("span", { class: "font-bold" }, "Connect to network")),
                 msfssdk.FSComponent.buildComponent("hr", { class: "pb-1" }),
                 msfssdk.FSComponent.buildComponent("div", { ref: this.errorRef, class: "hidden error-bg w-100 h-auto px-2 py-1 rounded-md mb-2" },
                     msfssdk.FSComponent.buildComponent("span", { class: "text-base font-bold" }, "Error"),
                     msfssdk.FSComponent.buildComponent("div", { id: "errorHolder", class: "pl-2 flex flex-col" })),
                 msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-4 mt-4" },
                     msfssdk.FSComponent.buildComponent("p", { class: "col-span-2 font-semibold" }, "Callsign"),
-                    msfssdk.FSComponent.buildComponent("ui-input", { ref: this.callsignRef, class: "col-span-2", type: "text", "no-tooltip": true, "no-key-navigation": true, "not-pad-interactive": true, idevent: "0", id: "callsign" })),
+                    msfssdk.FSComponent.buildComponent(InputBar, { ref: this.callsignRef, onInput: this.onCallsignInput.bind(this), transformInput: (input) => { return this.transformInput(input, 7, alphanumericRegex); }, id: "callsign", class: "col-span-2" })),
                 msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-4 mt-2" },
                     msfssdk.FSComponent.buildComponent("p", { class: "col-span-2 font-semibold" }, "Aircraft Code"),
-                    msfssdk.FSComponent.buildComponent("ui-input", { ref: this.aircraftRef, class: "col-span-2", type: "text", "no-tooltip": true, "no-key-navigation": true, "not-pad-interactive": true, idevent: "0", id: "aircraftCode" })),
+                    msfssdk.FSComponent.buildComponent(InputBar, { ref: this.aircraftRef, onInput: this.onAircraftInput.bind(this), transformInput: (input) => { return this.transformInput(input, 4, alphanumericRegex); }, id: "aircraftCode", class: "col-span-2" })),
                 msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-4 mt-2" },
                     msfssdk.FSComponent.buildComponent("p", { class: "col-span-2 font-semibold" }, "SelCal Code"),
-                    msfssdk.FSComponent.buildComponent("ui-input", { ref: this.selcalRef, class: "col-span-2", type: "text", "no-tooltip": true, "no-key-navigation": true, "not-pad-interactive": true, idevent: "0", id: "selcalCode" })),
+                    msfssdk.FSComponent.buildComponent(InputBar, { ref: this.selcalRef, onInput: this.onSelcalInput.bind(this), transformInput: (input) => { return this.transformInput(input, 5, selcalRegex); }, id: "callsign", class: "col-span-2" })),
                 msfssdk.FSComponent.buildComponent("new-push-button", { ref: this.connectRef, class: "w-auto mt-4 mx-4 text-center", title: "Connect" })));
         }
     }
@@ -225,7 +256,7 @@
         }
         handleFrontEndEvents() {
             this.subscriber.on("connectToNetwork").handle((values) => {
-                this.websocket.send(`ConnectToNetwork/Callsign:${values.callsign}/TypeCode:${values.aircraft}/SelCal Code:${values.selcal}`);
+                this.websocket.send(`ConnectToNetwork/Callsign:${values.callsign}/TypeCode:${values.aircraft}/SelCal:${values.selcal}`);
             });
         }
         handleEstablishedConnection(e) {
@@ -353,7 +384,7 @@
         }
         render() {
             return (msfssdk.FSComponent.buildComponent("ingamepanel-custom", null,
-                msfssdk.FSComponent.buildComponent("ingame-ui", { id: "vPE_Frame", "panel-id": "PANEL_VPILOT_EXTENDER", class: "ingameUiFrame panelInvisible", title: "vPE", "content-fit": "true", "min-width": "100px", "min-height": "160px" },
+                msfssdk.FSComponent.buildComponent("ingame-ui", { id: "vPE_Frame", "panel-id": "PANEL_VPILOT_EXTENDER", class: "ingameUiFrame panelInvisible", title: "vPE", "min-width": "40", "min-height": "40" },
                     msfssdk.FSComponent.buildComponent("div", { id: "header", ref: this.headerRef, class: "mx-1 pb-2 hidden" },
                         msfssdk.FSComponent.buildComponent("tab-menu", { selectedIndex: "0" },
                             msfssdk.FSComponent.buildComponent("tabmenu-item", { "tab-id": "Tab1", id: "TabSwitch1", title: "Flight Plan" }),

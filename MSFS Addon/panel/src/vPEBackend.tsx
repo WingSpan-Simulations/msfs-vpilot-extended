@@ -5,10 +5,11 @@ const websocketUri = "ws://127.0.0.1:8080/";
 /* 	INCOMING MESSAGES
 
 NetworkConnectionEstablished/CallSign:###/TypeCode:###/SelCal Code:###
+DisconnectedFromNetwork
 
 ======================================================================
 	OUTGOING MESSAGES
-ConnectToNetwork/Callsign:###/TypeCode:###/SelCal Code:###
+ConnectToNetwork/Callsign:###/TypeCode:###/SelCal:###
 
 */
 
@@ -50,7 +51,7 @@ export class Backend {
 
 	handleFrontEndEvents() {
 		this.subscriber.on("connectToNetwork").handle((values) => {
-			this.websocket.send(`ConnectToNetwork/Callsign:${values.callsign}/TypeCode:${values.aircraft}/SelCal Code:${values.selcal}`)
+			this.websocket.send(`ConnectToNetwork/Callsign:${values.callsign}/TypeCode:${values.aircraft}/SelCal:${values.selcal}`)
 		})
 	}
 

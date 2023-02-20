@@ -104,9 +104,8 @@ class VPEPanel extends DisplayComponent<vPEPanelProps> {
                     panel-id="PANEL_VPILOT_EXTENDER"
                     class="ingameUiFrame panelInvisible"
                     title="vPE"
-                    content-fit="true"
-                    min-width="100px"
-                    min-height="160px"
+                    min-width="40"
+                    min-height="40"
                 >
                     <div id="header" ref={this.headerRef} class="mx-1 pb-2 hidden">
                         <tab-menu selectedIndex="0">
