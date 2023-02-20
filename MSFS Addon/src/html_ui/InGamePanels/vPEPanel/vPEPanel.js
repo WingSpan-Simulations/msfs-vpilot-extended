@@ -103,7 +103,6 @@
                         (input) => input.length > 4 && inputErrors.aircraft.tooLong,
                         (input) => alphanumericRegex.test(input) !== true && inputErrors.aircraft.alphanumeric
                     ]);
-                    console.log(errors);
                     this.errors.set(errors);
                 }
             });
@@ -168,6 +167,11 @@
             let errors = flatten(Object.values(this.errors.get()));
             if (errors.length == 0) {
                 console.log("CLICKED");
+                this.props.publisher.pub("connectToNetwork", {
+                    callsign: this.callsign,
+                    aircraft: this.aircraft,
+                    selcal: this.selcal
+                });
             }
         }
         render() {
@@ -215,7 +219,14 @@
         constructor(eventBus) {
             this.websocket;
             this.publisher = eventBus.getPublisher();
+            this.subscriber = eventBus.getSubscriber();
+            this.handleFrontEndEvents();
             this.createWebsocket();
+        }
+        handleFrontEndEvents() {
+            this.subscriber.on("connectToNetwork").handle((values) => {
+                this.websocket.send(`ConnectToNetwork/Callsign:${values.callsign}/TypeCode:${values.aircraft}/SelCal Code:${values.selcal}`);
+            });
         }
         handleEstablishedConnection(e) {
             this.awaitingConnection = false;
@@ -282,6 +293,7 @@
 
     const eventBus = new msfssdk.EventBus();
     const subscriber = eventBus.getSubscriber();
+    const publisher = eventBus.getPublisher();
     new Backend(eventBus);
     class VPEPanel extends msfssdk.DisplayComponent {
         constructor(props) {
@@ -354,7 +366,7 @@
                     msfssdk.FSComponent.buildComponent("div", { id: "main" },
                         msfssdk.FSComponent.buildComponent(AwaitingConnection, { ref: this.awaitConnectionRef, timeToRetry: this.timeToRetry }),
                         msfssdk.FSComponent.buildComponent(FlightPlanPage, { ref: this.flightPlanRef }),
-                        msfssdk.FSComponent.buildComponent(ConnectPage, { ref: this.vatsimConnectRef })),
+                        msfssdk.FSComponent.buildComponent(ConnectPage, { ref: this.vatsimConnectRef, publisher: publisher })),
                     msfssdk.FSComponent.buildComponent("div", { class: "condensedPanel", id: "footer" }))));
         }
     }

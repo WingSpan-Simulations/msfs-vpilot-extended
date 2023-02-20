@@ -14,7 +14,7 @@ using System.Threading.Tasks;
  *  Event/Arg1Key:Arg1Value/Arg2Key:Arg2Value/...:...
  *  
  *  Connect To Network
- *  NetworkConnect/Callsign:XXX/TypeCode:XXX/SelCal:XXX
+ *  ConnectToNetwork/Callsign:XXX/TypeCode:XXX/SelCal:XXX
  
  */
 
@@ -65,12 +65,12 @@ namespace vPilotExtended
 
             this.broker.PostDebugMessage("[WebSocket] Event: " + type + "; Args: " + string.Join(",", arguments));
 
-            //switch (type)
-            //{
-              //  case "networkconnect":
-                //    this.broker.RequestConnect(arguments["callsign"], arguments["typecode"], arguments["selcal"]);
-                  //  break;
-            //};
+            switch (type)
+            {
+                case "connecttonetwork":
+                    this.broker.RequestConnect(arguments["callsign"], arguments["typecode"], arguments["selcal"]);
+                    break;
+            };
 
             //this.broker.RequestConnect
         }
