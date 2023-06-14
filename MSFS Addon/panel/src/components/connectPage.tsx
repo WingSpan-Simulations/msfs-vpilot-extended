@@ -1,5 +1,6 @@
 import { FSComponent, DisplayComponent, VNode, Fragment, ComponentProps, NodeReference, Subject, Publisher } from "msfssdk";
 import { FrontendEvents } from "../vPEBackend";
+import { checkSimVarLoaded } from "../vPEPanel";
 import { InputBar } from "./inputBar";
 
 
@@ -48,7 +49,7 @@ export class ConnectPage extends DisplayComponent<ConnectProps> {
         this.selcal = "";
         this.errors = Subject.create<{ [key: string]: Array<string> }>({
             callsign: [inputErrors.callsign.tooShort],
-            aircraft: [inputErrors.aircraft.tooShort],
+            aircraft: [],
             selcal: []
         });
 
@@ -75,8 +76,13 @@ export class ConnectPage extends DisplayComponent<ConnectProps> {
 
         this.errors.sub(() => { this.renderErrors() })
         this.setInputColours(this.callsignRef.instance.getInputBar())
-        this.setInputColours(this.aircraftRef.instance.getInputBar())
         this.renderErrors()
+
+        checkSimVarLoaded.then(() => {
+            let aircraftModel: string = Utils.Translate(SimVar.GetSimVarValue("ATC MODEL", "string"))
+            this.aircraftRef.instance.getInputBar().instance.setValue(aircraftModel.slice(3, aircraftModel.length))
+            this.aircraft = aircraftModel
+        })
     }
 
     checkInputErrors(input: string, ref: NodeReference<TemplateElement>, errorChecks: Array<(input: string) => string | false>) {

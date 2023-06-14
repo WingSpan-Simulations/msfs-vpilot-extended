@@ -5,6 +5,7 @@ interface InputBarProps extends ComponentProps {
     id?: string;
     transformInput?: (input: string) => string;
     onInput?: (input: string, ref: NodeReference<any>) => void;
+    requireInput?: boolean
 }
 export interface InputBar {
     ref: NodeReference<any>
@@ -27,8 +28,27 @@ export class InputBar extends DisplayComponent<InputBarProps> {
                 if (this.props.onInput) {
                     this.props.onInput(input, this.ref)
                 }
+                if (this.props.requireInput) {
+                    if (input == "") {
+                        this.setInputError()
+                    } else {
+                        this.setInputError(true)
+                    }
+                }
             }
         })
+
+        if (this.props.requireInput) {
+            this.setInputError()
+        }
+    }
+
+    setInputError(remove?: boolean) {
+        if (this.ref.instance.classList.contains("error") !== true && remove !== true) {
+            this.ref.instance.classList.add("error")
+        } else if (this.ref.instance.classList.contains("error") === true && remove === true) {
+            this.ref.instance.classList.remove("error")
+        }
     }
 
     public getInputBar() {

@@ -4,7 +4,7 @@ const websocketUri = "ws://127.0.0.1:8080/";
 
 /* 	INCOMING MESSAGES
 
-NetworkConnectionEstablished/CallSign:###/TypeCode:###/SelCal Code:###
+NetworkConnectionEstablished/CallSign:###/TypeCode:###/SelCal:###
 DisconnectedFromNetwork
 
 ======================================================================
@@ -18,6 +18,22 @@ interface NetworkConnect {
 	aircraft: string;
 	selcal: string;
 };
+interface FileFlightPlan {
+	departure: string;
+	arrival: string;
+	alternate: string;
+	cruiseAlt: number;
+	cruiseSpeed: number;
+	route: string;
+	remarks: string;
+	departureTime: number;
+	hoursEnroute: number;
+	minsEnroute: number;
+	hoursFuel: number;
+	minsFuel: number;
+	equipment: string;
+	isVFR: boolean;
+}
 
 export interface BackendEvents {
 	establishedConnection: boolean;
@@ -27,6 +43,8 @@ export interface BackendEvents {
 
 export interface FrontendEvents {
 	connectToNetwork: NetworkConnect;
+	disconnectFromNetwork: boolean;
+	fileFlightPlan: FileFlightPlan;
 }
 
 export interface Backend {
@@ -52,6 +70,17 @@ export class Backend {
 	handleFrontEndEvents() {
 		this.subscriber.on("connectToNetwork").handle((values) => {
 			this.websocket.send(`ConnectToNetwork/Callsign:${values.callsign}/TypeCode:${values.aircraft}/SelCal:${values.selcal}`)
+		})
+
+		this.subscriber.on("disconnectFromNetwork").handle(() => {
+			this.websocket.send("DisconnectFromNetwork")
+		})
+
+		this.subscriber.on("fileFlightPlan").handle((values) => {
+			// console.log(`SendFlight/Departure:${values.departure}/Arrival:${values.arrival}/Alternate:${values.alternate}/CruiseAlt:${values.cruiseAlt}/CruiseSpeed:${values.cruiseSpeed}/Route:${values.route}/Remarks:${values.remarks}/DepartureTime:${values.departureTime}/HoursEnroute:${values.hoursEnroute}/MinsEnroute:${values.minsEnroute}/HoursFuel:${values.hoursFuel}/MinsFuel:${values.minsFuel}/IsVFR:${values.isVFR}`)
+			this.websocket.send(`SendFlightPlan/Departure:${values.departure}/Arrival:${values.arrival}/Alternate:${values.alternate}/CruiseAlt:${values.cruiseAlt}/CruiseSpeed:${values.cruiseSpeed}/Route:${values.route}/Remarks:${values.remarks}/DepartureTime:${values.departureTime}`)
+			this.websocket.send(`SendFlightPlan/HoursEnroute:${values.hoursEnroute}/MinsEnroute:${values.minsEnroute}/HoursFuel:${values.hoursFuel}/MinsFuel:${values.minsFuel}/EquipmentCode:${values.equipment}/IsVFR:${values.isVFR}`)
+			this.websocket.send(`FileFlightPlan/Null:Null`)
 		})
 	}
 
@@ -81,6 +110,10 @@ export class Backend {
 			case "NetworkConnectionEstablished":
 				console.log(args)
 				this.publisher.pub("callsign", args["CallSign"])
+				break;
+			case "DisconnectedFromNetwork":
+				this.publisher.pub("callsign", undefined)
+				break;
 		}
 	}
 

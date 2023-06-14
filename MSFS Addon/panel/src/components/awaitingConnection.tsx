@@ -38,9 +38,6 @@ export class AwaitingConnection extends DisplayComponent<AwaitingConnectionProps
                         }
                         return establishText
                     })}</p>
-                    {/* <br />
-                    <br />
-                    <new-push-button class="w-auto -my-4 mx-4" title="Attempt vPilot connection"></new-push-button> */}
                 </div>
             </div>
         );

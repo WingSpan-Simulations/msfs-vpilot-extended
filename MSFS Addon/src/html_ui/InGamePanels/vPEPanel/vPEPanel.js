@@ -1,4 +1,4 @@
-(function (msfssdk) {
+(function (exports, msfssdk) {
     'use strict';
 
     class LoadingIcon extends msfssdk.DisplayComponent {
@@ -53,21 +53,37 @@
                     if (this.props.onInput) {
                         this.props.onInput(input, this.ref);
                     }
+                    if (this.props.requireInput) {
+                        if (input == "") {
+                            this.setInputError();
+                        }
+                        else {
+                            this.setInputError(true);
+                        }
+                    }
                 }
             });
+            if (this.props.requireInput) {
+                this.setInputError();
+            }
+        }
+        setInputError(remove) {
+            if (this.ref.instance.classList.contains("error") !== true && remove !== true) {
+                this.ref.instance.classList.add("error");
+            }
+            else if (this.ref.instance.classList.contains("error") === true && remove === true) {
+                this.ref.instance.classList.remove("error");
+            }
         }
         getInputBar() {
             return this.ref;
-        }
-        setInput(input) {
-            this.ref.instance.setValue(input);
         }
         render() {
             return (msfssdk.FSComponent.buildComponent("ui-input", { ref: this.ref, class: this.props.class, id: this.props.id, type: "text", "no-tooltip": true, "no-key-navigation": true, "not-pad-interactive": true, idevent: "0" }));
         }
     }
 
-    const alphanumericRegex = /^[A-Za-z0-9]*$/;
+    const alphanumericRegex$1 = /^[A-Za-z0-9]*$/;
     const selcalRegex = /^[A-Za-z]{2}-[A-Za-z]{2}$/;
     const inputErrors = {
         callsign: {
@@ -93,7 +109,7 @@
             this.selcal = "";
             this.errors = msfssdk.Subject.create({
                 callsign: [inputErrors.callsign.tooShort],
-                aircraft: [inputErrors.aircraft.tooShort],
+                aircraft: [],
                 selcal: []
             });
             this.pageRef = msfssdk.FSComponent.createRef();
@@ -115,9 +131,12 @@
             this.connectRef.instance.addEventListener("click", (ev) => { this.connectToServer(); });
             this.errors.sub(() => { this.renderErrors(); });
             this.setInputColours(this.callsignRef.instance.getInputBar());
-            this.setInputColours(this.aircraftRef.instance.getInputBar());
             this.renderErrors();
-            this.aircraftRef.instance.setInput(SimVar.GetSimVarValue("ATC MODEL", "string").slice(3, 7));
+            checkSimVarLoaded.then(() => {
+                let aircraftModel = SimVar.GetSimVarValue("ATC MODEL", "string");
+                this.aircraftRef.instance.getInputBar().instance.setValue(aircraftModel.slice(3, aircraftModel.length));
+                this.aircraft = aircraftModel;
+            });
         }
         checkInputErrors(input, ref, errorChecks) {
             let errors = [];
@@ -183,7 +202,7 @@
             errors.callsign = this.checkInputErrors(this.callsign, ref, [
                 (input) => input.length < 2 && inputErrors.callsign.tooShort,
                 (input) => input.length > 7 && inputErrors.callsign.tooLong,
-                (input) => alphanumericRegex.test(input) !== true && inputErrors.callsign.alphanumeric
+                (input) => alphanumericRegex$1.test(input) !== true && inputErrors.callsign.alphanumeric
             ]);
             this.errors.set(errors);
         }
@@ -193,7 +212,7 @@
             errors.aircraft = this.checkInputErrors(this.aircraft, ref, [
                 (input) => input.length <= 0 && inputErrors.aircraft.tooShort,
                 (input) => input.length > 4 && inputErrors.aircraft.tooLong,
-                (input) => alphanumericRegex.test(input) !== true && inputErrors.aircraft.alphanumeric
+                (input) => alphanumericRegex$1.test(input) !== true && inputErrors.aircraft.alphanumeric
             ]);
             this.errors.set(errors);
         }
@@ -215,10 +234,10 @@
                     msfssdk.FSComponent.buildComponent("div", { id: "errorHolder", class: "pl-2 flex flex-col" })),
                 msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-4 mt-4" },
                     msfssdk.FSComponent.buildComponent("p", { class: "col-span-2 font-semibold" }, "Callsign"),
-                    msfssdk.FSComponent.buildComponent(InputBar, { ref: this.callsignRef, onInput: this.onCallsignInput.bind(this), transformInput: (input) => { return this.transformInput(input, 7, alphanumericRegex); }, id: "callsign", class: "col-span-2" })),
+                    msfssdk.FSComponent.buildComponent(InputBar, { ref: this.callsignRef, onInput: this.onCallsignInput.bind(this), transformInput: (input) => { return this.transformInput(input, 7, alphanumericRegex$1); }, id: "callsign", class: "col-span-2" })),
                 msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-4 mt-2" },
                     msfssdk.FSComponent.buildComponent("p", { class: "col-span-2 font-semibold" }, "Aircraft Code"),
-                    msfssdk.FSComponent.buildComponent(InputBar, { ref: this.aircraftRef, onInput: this.onAircraftInput.bind(this), transformInput: (input) => { return this.transformInput(input, 4, alphanumericRegex); }, id: "aircraftCode", class: "col-span-2" })),
+                    msfssdk.FSComponent.buildComponent(InputBar, { ref: this.aircraftRef, onInput: this.onAircraftInput.bind(this), transformInput: (input) => { return this.transformInput(input, 4, alphanumericRegex$1); }, id: "aircraftCode", class: "col-span-2" })),
                 msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-4 mt-2" },
                     msfssdk.FSComponent.buildComponent("p", { class: "col-span-2 font-semibold" }, "SelCal Code"),
                     msfssdk.FSComponent.buildComponent(InputBar, { ref: this.selcalRef, onInput: this.onSelcalInput.bind(this), transformInput: (input) => { return this.transformInput(input, 5, selcalRegex); }, id: "callsign", class: "col-span-2" })),
@@ -226,10 +245,89 @@
         }
     }
 
+    class InputBox extends msfssdk.DisplayComponent {
+        constructor(props) {
+            super(props);
+            this.ref = msfssdk.FSComponent.createRef();
+            this.uuid = Date.now().toString(36) + Math.random().toString(36).substring(2);
+        }
+        onAfterRender(node) {
+            this.ref.instance.addEventListener("focus", () => {
+                Coherent.trigger('FOCUS_INPUT_FIELD', this.uuid);
+            });
+            this.ref.instance.addEventListener("blur", () => {
+                Coherent.trigger('UNFOCUS_INPUT_FIELD', this.uuid);
+            });
+            this.ref.instance.addEventListener("unload", () => {
+                Coherent.trigger('UNFOCUS_INPUT_FIELD', this.uuid);
+            });
+            this.ref.instance.addEventListener("input", () => {
+                let input = this.ref.instance.value;
+                if (input !== undefined) {
+                    if (this.props.transformInput) {
+                        input = this.props.transformInput(input);
+                        this.ref.instance.value = input;
+                    }
+                    if (this.props.onInput) {
+                        this.props.onInput(input, this.ref);
+                    }
+                }
+            });
+        }
+        getInputBar() {
+            return this.ref;
+        }
+        render() {
+            return (msfssdk.FSComponent.buildComponent("textarea", { rows: "3", cols: "33", ref: this.ref, class: `default-textarea ${this.props.class}`, id: this.props.id, type: "text", "no-tooltip": true, "no-key-navigation": true, "not-pad-interactive": true, idevent: "0" }));
+        }
+    }
+
+    class ScrollButton extends msfssdk.DisplayComponent {
+        constructor(props) {
+            super(props);
+            this.ref = msfssdk.FSComponent.createRef();
+        }
+        onAfterRender(node) {
+            this.switchText = this.ref.instance.querySelector(".centered-text span") || undefined;
+            if (this.switchText !== undefined)
+                this.switchText.addEventListener("DOMSubtreeModified", () => {
+                    var _a;
+                    let input = ((_a = this.switchText) === null || _a === void 0 ? void 0 : _a.innerHTML) || "";
+                    if (this.props.onClick) {
+                        this.props.onClick(input);
+                    }
+                });
+        }
+        render() {
+            return (msfssdk.FSComponent.buildComponent("new-list-button", { style: "width: 0px", ref: this.ref, class: this.props.class, id: this.props.class, choices: this.props.choices.join(",") }));
+        }
+    }
+
+    const alphanumericRegex = /^[A-Za-z0-9]*$/;
+    const alphabetRegex = /^[A-Za-z]*$/;
+    const numericRegex = /^[0-9]*$/;
+    const timeSplitRegex = /^\d{1,2}(:\d{0,2})?$/;
+    const ICAOMaxLength = 4;
+    const departTimeMaxLength = 4;
+    const timeSplitMaxLength = 5;
     class FlightPlanPage extends msfssdk.DisplayComponent {
         constructor(props) {
             super(props);
             this.pageRef = msfssdk.FSComponent.createRef();
+            this.fileButtonRef = msfssdk.FSComponent.createRef();
+            this.selectedFlightRules = "instrument";
+            this.selectedVoice = "send + receive";
+            this.departureICAO = "";
+            this.arrivalICAO = "";
+            this.alternateICAO = "";
+            this.departureTime = 0;
+            this.timeEnroute = { hours: 0, minutes: 0 };
+            this.fuelAvailable = { hours: 0, minutes: 0 };
+            this.cruiseSpeed = 0;
+            this.cruiseAlt = 0;
+            this.route = "";
+            this.remarks = "";
+            this.equipment = "";
         }
         hide() {
             this.pageRef.instance.classList.add('hidden');
@@ -239,9 +337,134 @@
                 this.pageRef.instance.classList.remove('hidden');
             }
         }
+        onAfterRender(node) {
+            this.fileButtonRef.instance.addEventListener("click", () => {
+                this.props.publisher.pub("fileFlightPlan", {
+                    departure: this.departureICAO,
+                    arrival: this.arrivalICAO,
+                    alternate: this.alternateICAO,
+                    cruiseAlt: this.cruiseSpeed,
+                    cruiseSpeed: this.cruiseAlt,
+                    route: this.route,
+                    remarks: this.remarks,
+                    departureTime: this.departureTime,
+                    hoursEnroute: this.timeEnroute.hours,
+                    minsEnroute: this.timeEnroute.minutes,
+                    hoursFuel: this.fuelAvailable.hours,
+                    minsFuel: this.fuelAvailable.minutes,
+                    equipment: this.equipment,
+                    isVFR: this.selectedFlightRules == "visual"
+                });
+            });
+        }
+        transformText(maxLength, regex, input) {
+            let newInput = input.toUpperCase().slice(0, maxLength);
+            if (regex.test(newInput) !== true) {
+                newInput = newInput.slice(0, newInput.length - 1);
+            }
+            return newInput;
+        }
+        onFlightRuleInput(input) { this.selectedFlightRules = input; }
+        onVoiceInput(input) { this.selectedVoice = input; }
+        onDepartureInput(input) { this.departureICAO = input; }
+        onArrivalInput(input) { this.arrivalICAO = input; }
+        onAlternateInput(input) { this.alternateICAO = input; }
+        onDepartureTimeInput(input) { this.departureTime = Number(input); }
+        onCruiseSpeedInput(input) { this.cruiseSpeed = Number(input); }
+        onCruiseAltitudeInput(input) { this.cruiseAlt = Number(input); }
+        onRouteInput(input) { this.route = input; }
+        onRemarksInput(input) { this.remarks = input; }
+        onEquipmentInput(input) { this.equipment = input; }
+        onTimeEnrouteInput(input) {
+            let time = input.split(":");
+            this.timeEnroute.hours = Number(time[0]);
+            this.timeEnroute.minutes = Number(time[1]);
+        }
+        onFuelAvailableInput(input) {
+            let time = input.split(":");
+            this.timeEnroute.hours = Number(time[0]);
+            this.timeEnroute.minutes = Number(time[1]);
+        }
+        transformDepartureTimeInput(input) {
+            let newInput = input.slice(0, departTimeMaxLength);
+            if (numericRegex.test(newInput) !== true) {
+                newInput = newInput.slice(0, newInput.length - 1);
+            }
+            let hours = newInput.slice(0, 2);
+            let mins = newInput.slice(2, 4);
+            let correctedInput = "";
+            if (Number(hours) > 24) {
+                correctedInput = "24";
+            }
+            else {
+                correctedInput = hours;
+            }
+            if (mins !== "" && Number(mins) > 59) {
+                correctedInput = correctedInput + "59";
+            }
+            else {
+                correctedInput = correctedInput + mins;
+            }
+            return correctedInput;
+        }
+        checkForErrors(ref) {
+            if (ref.instance.value == "" && ref.instance.classList.contains("error") !== true) {
+                ref.instance.classList.add("error");
+            }
+            else if (ref.instance.classList.contains("error") === true) {
+                ref.instance.classList.remove("error");
+            }
+        }
         render() {
             return (msfssdk.FSComponent.buildComponent("div", { class: "hidden", ref: this.pageRef },
-                msfssdk.FSComponent.buildComponent("p", null, "Testing flight plan...")));
+                msfssdk.FSComponent.buildComponent("virtual-scroll", { direction: "y", "scroll-type": "auto" },
+                    msfssdk.FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Flight Rules"),
+                    msfssdk.FSComponent.buildComponent(ScrollButton, { onClick: this.onFlightRuleInput.bind(this), class: "pt-1", choices: ["instrument", "visual"] }),
+                    msfssdk.FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Voice"),
+                    msfssdk.FSComponent.buildComponent(ScrollButton, { onClick: this.onVoiceInput.bind(this), class: "pt-1", choices: ["send + receive", "receive only", "text only"] }),
+                    msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-3 pt-1" },
+                        msfssdk.FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Departure"),
+                        msfssdk.FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Arrival"),
+                        msfssdk.FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Alternate")),
+                    msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-3" },
+                        msfssdk.FSComponent.buildComponent(InputBar, { requireInput: true, onInput: this.onDepartureInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" }),
+                        msfssdk.FSComponent.buildComponent(InputBar, { onInput: this.onArrivalInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" }),
+                        msfssdk.FSComponent.buildComponent(InputBar, { onInput: this.onAlternateInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" })),
+                    msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-2 pt-1" },
+                        msfssdk.FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Departure Time"),
+                        msfssdk.FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Equipment Suffix")),
+                    msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-2" },
+                        msfssdk.FSComponent.buildComponent("div", { class: "flex" },
+                            msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-3" },
+                                msfssdk.FSComponent.buildComponent(InputBar, { requireInput: true, onInput: this.onDepartureTimeInput.bind(this), transformInput: this.transformDepartureTimeInput, class: "px-1 col-span-2" }),
+                                msfssdk.FSComponent.buildComponent("p", { class: "px-1 m-auto col-span-1" }, "hhmm zulu"))),
+                        msfssdk.FSComponent.buildComponent("div", { class: "flex" },
+                            msfssdk.FSComponent.buildComponent(InputBar, { onInput: this.onEquipmentInput.bind(this), transformInput: this.transformText.bind(this, 1, alphabetRegex), class: "px-1" }))),
+                    msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-2 pt-1" },
+                        msfssdk.FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Time Enroute"),
+                        msfssdk.FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Fuel Available")),
+                    msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-2" },
+                        msfssdk.FSComponent.buildComponent("div", { class: "flex" },
+                            msfssdk.FSComponent.buildComponent(InputBar, { onInput: this.onTimeEnrouteInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, timeSplitRegex), class: "px-1" }),
+                            msfssdk.FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "hh:mm")),
+                        msfssdk.FSComponent.buildComponent("div", { class: "flex" },
+                            msfssdk.FSComponent.buildComponent(InputBar, { onInput: this.onFuelAvailableInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, timeSplitRegex), class: "px-1" }),
+                            msfssdk.FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "hh:mm"))),
+                    msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-2 pt-1" },
+                        msfssdk.FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Cruise Speed"),
+                        msfssdk.FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Cruise Alt")),
+                    msfssdk.FSComponent.buildComponent("div", { class: "grid grid-cols-2" },
+                        msfssdk.FSComponent.buildComponent("div", { class: "flex" },
+                            msfssdk.FSComponent.buildComponent(InputBar, { requireInput: true, onInput: this.onCruiseSpeedInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, numericRegex), class: "px-1" }),
+                            msfssdk.FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "TAS")),
+                        msfssdk.FSComponent.buildComponent("div", { class: "flex" },
+                            msfssdk.FSComponent.buildComponent(InputBar, { requireInput: true, onInput: this.onCruiseSpeedInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, numericRegex), class: "px-1" }),
+                            msfssdk.FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "ft"))),
+                    msfssdk.FSComponent.buildComponent("p", { class: "font-semibold pt-1 px-1" }, "Route"),
+                    msfssdk.FSComponent.buildComponent(InputBox, { onInput: this.onRouteInput.bind(this), transformInput: (input) => { return input.toUpperCase(); }, class: "mx-1" }),
+                    msfssdk.FSComponent.buildComponent("p", { class: "font-semibold pt-1 px-1" }, "Remarks"),
+                    msfssdk.FSComponent.buildComponent(InputBox, { onInput: this.onRemarksInput.bind(this), transformInput: (input) => { return input.toUpperCase(); }, class: "mx-1" })),
+                msfssdk.FSComponent.buildComponent("new-push-button", { ref: this.fileButtonRef, class: "w-auto mt-2 mx-2 text-center", title: "File" })));
         }
     }
 
@@ -257,6 +480,15 @@
         handleFrontEndEvents() {
             this.subscriber.on("connectToNetwork").handle((values) => {
                 this.websocket.send(`ConnectToNetwork/Callsign:${values.callsign}/TypeCode:${values.aircraft}/SelCal:${values.selcal}`);
+            });
+            this.subscriber.on("disconnectFromNetwork").handle(() => {
+                this.websocket.send("DisconnectFromNetwork");
+            });
+            this.subscriber.on("fileFlightPlan").handle((values) => {
+                // console.log(`SendFlight/Departure:${values.departure}/Arrival:${values.arrival}/Alternate:${values.alternate}/CruiseAlt:${values.cruiseAlt}/CruiseSpeed:${values.cruiseSpeed}/Route:${values.route}/Remarks:${values.remarks}/DepartureTime:${values.departureTime}/HoursEnroute:${values.hoursEnroute}/MinsEnroute:${values.minsEnroute}/HoursFuel:${values.hoursFuel}/MinsFuel:${values.minsFuel}/IsVFR:${values.isVFR}`)
+                this.websocket.send(`SendFlightPlan/Departure:${values.departure}/Arrival:${values.arrival}/Alternate:${values.alternate}/CruiseAlt:${values.cruiseAlt}/CruiseSpeed:${values.cruiseSpeed}/Route:${values.route}/Remarks:${values.remarks}/DepartureTime:${values.departureTime}`);
+                this.websocket.send(`SendFlightPlan/HoursEnroute:${values.hoursEnroute}/MinsEnroute:${values.minsEnroute}/HoursFuel:${values.hoursFuel}/MinsFuel:${values.minsFuel}/EquipmentCode:${values.equipment}/IsVFR:${values.isVFR}`);
+                this.websocket.send(`FileFlightPlan/`);
             });
         }
         handleEstablishedConnection(e) {
@@ -281,6 +513,10 @@
                 case "NetworkConnectionEstablished":
                     console.log(args);
                     this.publisher.pub("callsign", args["CallSign"]);
+                    break;
+                case "DisconnectedFromNetwork":
+                    this.publisher.pub("callsign", undefined);
+                    break;
             }
         }
         handleError(e) {
@@ -326,6 +562,14 @@
     const subscriber = eventBus.getSubscriber();
     const publisher = eventBus.getPublisher();
     new Backend(eventBus);
+    const checkSimVarLoaded = new Promise(resolve => {
+        const interval = setInterval(() => {
+            if (window.simvar !== undefined) {
+                clearInterval(interval);
+                resolve(true);
+            }
+        });
+    });
     class VPEPanel extends msfssdk.DisplayComponent {
         constructor(props) {
             super(props);
@@ -339,6 +583,11 @@
             subscriber.on("establishedConnection").handle(value => this.websocketConnectionStateChanged(value));
             subscriber.on("timeToRetry").handle(value => { this.timeToRetry.set(value); });
             subscriber.on("callsign").handle(value => this.vatsimConnectionStateChanged(value));
+        }
+        onAfterRender(node) {
+            this.disconnectRef.instance.addEventListener("click", () => {
+                publisher.pub("disconnectFromNetwork", true);
+            });
         }
         vatsimConnectionStateChanged(callsign) {
             let connected = callsign !== undefined;
@@ -393,10 +642,10 @@
                             msfssdk.FSComponent.buildComponent("div", { class: "flex justify-center items-center" },
                                 msfssdk.FSComponent.buildComponent("span", { class: "font-bold text-base" }, this.callsign)),
                             msfssdk.FSComponent.buildComponent("div", { class: "col-span-2" },
-                                msfssdk.FSComponent.buildComponent("new-push-button", { style: "width: 100%", class: "mt-1", title: "Disconnect" })))),
+                                msfssdk.FSComponent.buildComponent("new-push-button", { ref: this.disconnectRef, style: "width: 100%", class: "mt-1", title: "Disconnect" })))),
                     msfssdk.FSComponent.buildComponent("div", { id: "main" },
                         msfssdk.FSComponent.buildComponent(AwaitingConnection, { ref: this.awaitConnectionRef, timeToRetry: this.timeToRetry }),
-                        msfssdk.FSComponent.buildComponent(FlightPlanPage, { ref: this.flightPlanRef }),
+                        msfssdk.FSComponent.buildComponent(FlightPlanPage, { ref: this.flightPlanRef, publisher: publisher }),
                         msfssdk.FSComponent.buildComponent(ConnectPage, { ref: this.vatsimConnectRef, publisher: publisher })),
                     msfssdk.FSComponent.buildComponent("div", { class: "condensedPanel", id: "footer" }))));
         }
@@ -406,4 +655,10 @@
     });
     checkAutoload();
 
-})(msfssdk);
+    exports.checkSimVarLoaded = checkSimVarLoaded;
+
+    Object.defineProperty(exports, '__esModule', { value: true });
+
+    return exports;
+
+})({}, msfssdk);

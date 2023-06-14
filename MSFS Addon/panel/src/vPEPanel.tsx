@@ -4,7 +4,6 @@ import {
     EventBus,
     FSComponent,
     NodeReference,
-    SimVarValueType,
     Subject,
     VNode,
 } from "msfssdk";
@@ -20,17 +19,28 @@ const backend = new Backend(eventBus);
 
 type possiblePages = "awaitConnection" | "vatsimConnect" | "flightPlan"
 
+export const checkSimVarLoaded = new Promise(resolve => {
+    const interval = setInterval(() => {
+        if (window.simvar !== undefined) {
+            clearInterval(interval);
+            resolve(true);
+        }
+    });
+});
+
 interface vPEPanelProps extends ComponentProps { }
 interface VPEPanel {
     awaitConnectionRef: NodeReference<AwaitingConnection>
     flightPlanRef: NodeReference<FlightPlanPage>
     headerRef: NodeReference<HTMLDivElement>
     vatsimConnectRef: NodeReference<ConnectPage>
+    disconnectRef: NodeReference<any>
 
     connection: boolean;
     timeToRetry: Subject<number>;
     callsign: Subject<string | undefined>;
 }
+
 class VPEPanel extends DisplayComponent<vPEPanelProps> {
     constructor(props: vPEPanelProps) {
         super(props);
@@ -47,6 +57,12 @@ class VPEPanel extends DisplayComponent<vPEPanelProps> {
         subscriber.on("establishedConnection").handle(value => this.websocketConnectionStateChanged(value));
         subscriber.on("timeToRetry").handle(value => { this.timeToRetry.set(value) });
         subscriber.on("callsign").handle(value => this.vatsimConnectionStateChanged(value))
+    }
+
+    onAfterRender(node: VNode): void {
+        this.disconnectRef.instance.addEventListener("click", () => {
+            publisher.pub("disconnectFromNetwork", true)
+        })
     }
 
     vatsimConnectionStateChanged(callsign?: string) {
@@ -118,14 +134,14 @@ class VPEPanel extends DisplayComponent<vPEPanelProps> {
                                 <span class="font-bold text-base">{this.callsign}</span>
                             </div>
                             <div class="col-span-2">
-                                <new-push-button style="width: 100%" class="mt-1" title={"Disconnect"} />
+                                <new-push-button ref={this.disconnectRef} style="width: 100%" class="mt-1" title={"Disconnect"} />
                             </div>
                         </div>
                     </div>
 
                     <div id="main">
                         <AwaitingConnection ref={this.awaitConnectionRef} timeToRetry={this.timeToRetry} />
-                        <FlightPlanPage ref={this.flightPlanRef} />
+                        <FlightPlanPage ref={this.flightPlanRef} publisher={publisher} />
                         <ConnectPage ref={this.vatsimConnectRef} publisher={publisher} />
                     </div>
 

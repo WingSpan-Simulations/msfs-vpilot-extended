@@ -27,12 +27,14 @@ namespace vPilotExtended {
     {
         private IBroker broker;
         private Action<string> WebSocketMessageRecievedEvent;
+        private Action WebSocketConnectionOpenedEvent;
         private WebSocketConnection connection = null;
 
-        public Server(IBroker broker, Action<string> WebSocketMessageRecievedEvent)
+        public Server(IBroker broker, Action<string> WebSocketMessageRecievedEvent, Action WebSocketConnectionOpenedEvent )
         {
             this.broker = broker;
             this.WebSocketMessageRecievedEvent = WebSocketMessageRecievedEvent;
+            this.WebSocketConnectionOpenedEvent = WebSocketConnectionOpenedEvent;
         }
 
         public async Task Initialize()
