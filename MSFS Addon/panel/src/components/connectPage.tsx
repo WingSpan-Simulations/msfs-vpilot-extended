@@ -80,7 +80,7 @@ export class ConnectPage extends DisplayComponent<ConnectProps> {
 
         checkSimVarLoaded.then(() => {
             let aircraftModel: string = Utils.Translate(SimVar.GetSimVarValue("ATC MODEL", "string"))
-            this.aircraftRef.instance.getInputBar().instance.setValue(aircraftModel.slice(3, aircraftModel.length))
+            this.aircraftRef.instance.getInputBar().instance.setValue(aircraftModel)
             this.aircraft = aircraftModel
         })
     }

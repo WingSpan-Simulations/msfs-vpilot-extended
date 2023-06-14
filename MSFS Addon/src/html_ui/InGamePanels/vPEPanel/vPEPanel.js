@@ -133,8 +133,8 @@
             this.setInputColours(this.callsignRef.instance.getInputBar());
             this.renderErrors();
             checkSimVarLoaded.then(() => {
-                let aircraftModel = SimVar.GetSimVarValue("ATC MODEL", "string");
-                this.aircraftRef.instance.getInputBar().instance.setValue(aircraftModel.slice(3, aircraftModel.length));
+                let aircraftModel = Utils.Translate(SimVar.GetSimVarValue("ATC MODEL", "string"));
+                this.aircraftRef.instance.getInputBar().instance.setValue(aircraftModel);
                 this.aircraft = aircraftModel;
             });
         }
@@ -288,11 +288,13 @@
             this.ref = msfssdk.FSComponent.createRef();
         }
         onAfterRender(node) {
-            this.switchText = this.ref.instance.querySelector(".centered-text span") || undefined;
-            if (this.switchText !== undefined)
-                this.switchText.addEventListener("DOMSubtreeModified", () => {
+            this.valueElement = this.ref.instance.querySelector(".SearchInput") || undefined;
+            if (this.valueElement !== undefined)
+                this.valueElement.addEventListener("DOMSubtreeModified", () => {
                     var _a;
-                    let input = ((_a = this.switchText) === null || _a === void 0 ? void 0 : _a.innerHTML) || "";
+                    console.log("AAAA");
+                    let input = ((_a = this.valueElement) === null || _a === void 0 ? void 0 : _a.innerHTML) || "";
+                    console.log(input);
                     if (this.props.onClick) {
                         this.props.onClick(input);
                     }
@@ -337,8 +339,9 @@
                 this.pageRef.instance.classList.remove('hidden');
             }
         }
-        onAfterRender(node) {
+        onAfterRender() {
             this.fileButtonRef.instance.addEventListener("click", () => {
+                console.log(this.getVoiceRemark());
                 this.props.publisher.pub("fileFlightPlan", {
                     departure: this.departureICAO,
                     arrival: this.arrivalICAO,
@@ -346,7 +349,7 @@
                     cruiseAlt: this.cruiseSpeed,
                     cruiseSpeed: this.cruiseAlt,
                     route: this.route,
-                    remarks: this.remarks,
+                    remarks: `${this.getVoiceRemark()} ${this.remarks}`,
                     departureTime: this.departureTime,
                     hoursEnroute: this.timeEnroute.hours,
                     minsEnroute: this.timeEnroute.minutes,
@@ -357,6 +360,16 @@
                 });
             });
         }
+        getVoiceRemark() {
+            switch (this.selectedVoice) {
+                case "send + receive":
+                    return "/v/";
+                case "receive only":
+                    return "/r/";
+                case "text only":
+                    return "/t/";
+            }
+        }
         transformText(maxLength, regex, input) {
             let newInput = input.toUpperCase().slice(0, maxLength);
             if (regex.test(newInput) !== true) {
@@ -365,7 +378,10 @@
             return newInput;
         }
         onFlightRuleInput(input) { this.selectedFlightRules = input; }
-        onVoiceInput(input) { this.selectedVoice = input; }
+        onVoiceInput(input) {
+            console.log(input);
+            this.selectedVoice = input;
+        }
         onDepartureInput(input) { this.departureICAO = input; }
         onArrivalInput(input) { this.arrivalICAO = input; }
         onAlternateInput(input) { this.alternateICAO = input; }
@@ -487,8 +503,8 @@
             this.subscriber.on("fileFlightPlan").handle((values) => {
                 // console.log(`SendFlight/Departure:${values.departure}/Arrival:${values.arrival}/Alternate:${values.alternate}/CruiseAlt:${values.cruiseAlt}/CruiseSpeed:${values.cruiseSpeed}/Route:${values.route}/Remarks:${values.remarks}/DepartureTime:${values.departureTime}/HoursEnroute:${values.hoursEnroute}/MinsEnroute:${values.minsEnroute}/HoursFuel:${values.hoursFuel}/MinsFuel:${values.minsFuel}/IsVFR:${values.isVFR}`)
                 this.websocket.send(`SendFlightPlan/Departure:${values.departure}/Arrival:${values.arrival}/Alternate:${values.alternate}/CruiseAlt:${values.cruiseAlt}/CruiseSpeed:${values.cruiseSpeed}/Route:${values.route}/Remarks:${values.remarks}/DepartureTime:${values.departureTime}`);
-                this.websocket.send(`SendFlightPlan/HoursEnroute:${values.hoursEnroute}/MinsEnroute:${values.minsEnroute}/HoursFuel:${values.hoursFuel}/MinsFuel:${values.minsFuel}/EquipmentCode:${values.equipment}/IsVFR:${values.isVFR}`);
-                this.websocket.send(`FileFlightPlan/`);
+                this.websocket.send(`SendFlightPlan/HoursEnroute:${values.hoursEnroute}/MinsEnroute:${values.minsEnroute}/HoursFuel:${values.hoursFuel}/MinsFuel:${values.minsFuel}/EquipmentCode:${values.equipment}/IsVFR:${values.isVFR}/FilePlan:true`);
+                // this.websocket.send(`FileFlightPlan/Null:Null`)
             });
         }
         handleEstablishedConnection(e) {

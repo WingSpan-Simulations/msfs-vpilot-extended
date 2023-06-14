@@ -106,9 +106,9 @@ namespace vPilotExtended
             }
 
             this.broker.PostDebugMessage(message);
-            this.broker.PostDebugMessage("[WebSocket] Event: " + type + "; Args: " + string.Join(",", arguments));
+            //this.broker.PostDebugMessage("[WebSocket] Event: " + type + "; Args: " + string.Join(",", arguments));
 
-            this.broker.PostDebugMessage(type);
+            //this.broker.PostDebugMessage(type);
 
             switch (type)
             {
@@ -119,9 +119,8 @@ namespace vPilotExtended
                 //    string a = this.broker.RequestFlightPlan() ? "NULL";
                 //    break;
                 case "sendflightplan":
-
                      foreach (KeyValuePair<string, string> argument in arguments)
-                    {
+                     {
                         switch (argument.Key)
                         {
                             case "departure":
@@ -166,14 +165,17 @@ namespace vPilotExtended
                             case "isvfr":
                                 this.flightPlan.vfr = bool.Parse(argument.Value);
                                 break;
+                            case "fileplan":
+                                this.broker.PostDebugMessage("FLIGHT PLAN FILED");
+                                this.broker.FileFlightPlan(this.flightPlan.departure, this.flightPlan.arrival, this.flightPlan.alternate, this.flightPlan.cruisealt, this.flightPlan.cruisespeed, this.flightPlan.route, this.flightPlan.remarks, this.flightPlan.heavyaircraft, this.flightPlan.equipmentCode, this.flightPlan.departuretime, this.flightPlan.hoursenroute, this.flightPlan.minsenroute, this.flightPlan.hoursfuel, this.flightPlan.minsfuel, this.flightPlan.vfr);
+                                break;
                         }
-                        this.broker.PostDebugMessage("Argument:" + argument.Key + " , " + argument.Value);
                     }
                     break;
-                case "fileflightplan":
-                    this.broker.PostDebugMessage("FLIGHT PLAN FILED");
-                    this.broker.FileFlightPlan(this.flightPlan.departure, this.flightPlan.arrival, this.flightPlan.alternate, this.flightPlan.cruisealt, this.flightPlan.cruisespeed, this.flightPlan.route, this.flightPlan.remarks, this.flightPlan.heavyaircraft, this.flightPlan.equipmentCode, this.flightPlan.departuretime, this.flightPlan.hoursenroute, this.flightPlan.minsenroute, this.flightPlan.hoursfuel, this.flightPlan.minsfuel, this.flightPlan.vfr);
-                    break;
+               // case "fileflightplan":
+               //     this.broker.PostDebugMessage("FLIGHT PLAN FILED");
+               //     this.broker.FileFlightPlan(this.flightPlan.departure, this.flightPlan.arrival, this.flightPlan.alternate, this.flightPlan.cruisealt, this.flightPlan.cruisespeed, this.flightPlan.route, this.flightPlan.remarks, this.flightPlan.heavyaircraft, this.flightPlan.equipmentCode, this.flightPlan.departuretime, this.flightPlan.hoursenroute, this.flightPlan.minsenroute, this.flightPlan.hoursfuel, this.flightPlan.minsfuel, this.flightPlan.vfr);
+               //     break;
                 case "disconnectfromnetwork":
                     this.broker.RequestDisconnect();
                     break;

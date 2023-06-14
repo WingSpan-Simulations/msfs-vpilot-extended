@@ -65,8 +65,9 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
         }
     }
 
-    onAfterRender(node: VNode): void {
+    onAfterRender() {
         this.fileButtonRef.instance.addEventListener("click", () => {
+            console.log(this.getVoiceRemark())
             this.props.publisher.pub("fileFlightPlan", {
                 departure: this.departureICAO,
                 arrival: this.arrivalICAO,
@@ -74,7 +75,7 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
                 cruiseAlt: this.cruiseSpeed,
                 cruiseSpeed: this.cruiseAlt,
                 route: this.route,
-                remarks: this.remarks,
+                remarks: `${this.getVoiceRemark()} ${this.remarks}`,
                 departureTime: this.departureTime,
                 hoursEnroute: this.timeEnroute.hours,
                 minsEnroute: this.timeEnroute.minutes,
@@ -84,6 +85,17 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
                 isVFR: this.selectedFlightRules == "visual"
             })
         })
+    }
+
+    getVoiceRemark() {
+        switch (this.selectedVoice) {
+            case "send + receive":
+                return "/v/"
+            case "receive only":
+                return "/r/"
+            case "text only":
+                return "/t/"
+        }
     }
 
     transformText(maxLength: number, regex: RegExp, input: string) {
@@ -97,7 +109,10 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
     }
 
     onFlightRuleInput(input: string) { this.selectedFlightRules = input }
-    onVoiceInput(input: string) { this.selectedVoice = input }
+    onVoiceInput(input: string) {
+        console.log(input)
+        this.selectedVoice = input
+    }
     onDepartureInput(input: string) { this.departureICAO = input }
     onArrivalInput(input: string) { this.arrivalICAO = input }
     onAlternateInput(input: string) { this.alternateICAO = input }

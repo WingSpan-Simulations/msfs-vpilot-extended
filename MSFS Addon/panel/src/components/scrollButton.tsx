@@ -8,8 +8,7 @@ interface ScrollButtonProps extends ComponentProps {
 }
 export interface ScrollButton {
     ref: NodeReference<TemplateElement>;
-    switchText?: Element;
-    backwardButton?: Element;
+    valueElement?: Element;
 }
 export class ScrollButton extends DisplayComponent<ScrollButtonProps> {
     constructor(props: ScrollButtonProps) {
@@ -19,11 +18,13 @@ export class ScrollButton extends DisplayComponent<ScrollButtonProps> {
     }
 
     onAfterRender(node: VNode): void {
-        this.switchText = this.ref.instance.querySelector(".centered-text span") || undefined;
+        this.valueElement = this.ref.instance.querySelector(".SearchInput") || undefined;
 
-        if (this.switchText !== undefined)
-            this.switchText.addEventListener("DOMSubtreeModified", () => {
-                let input = this.switchText?.innerHTML || ""
+        if (this.valueElement !== undefined)
+            this.valueElement.addEventListener("DOMSubtreeModified", () => {
+                console.log("AAAA")
+                let input = this.valueElement?.innerHTML || ""
+                console.log(input)
                 if (this.props.onClick) {
                     this.props.onClick(input)
                 }
