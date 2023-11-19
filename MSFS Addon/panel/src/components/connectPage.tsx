@@ -1,8 +1,11 @@
-import { FSComponent, DisplayComponent, VNode, Fragment, ComponentProps, NodeReference, Subject, Publisher } from "msfssdk";
-import { FrontendEvents } from "../vPEBackend";
-import { checkSimVarLoaded } from "../vPEPanel";
-import { InputBar } from "./inputBar";
+import {
+    ComponentProps, DisplayComponent, Fragment, FSComponent, NodeReference, Publisher, Subject,
+    VNode
+} from '@microsoft/msfs-sdk';
 
+import { checkSimVarLoaded } from '../Utilites';
+import { FrontendEvents } from '../vPEBackend';
+import { InputBar } from './inputBar';
 
 const alphanumericRegex = /^[A-Za-z0-9]*$/
 const selcalRegex = /^[A-Za-z]{2}-[A-Za-z]{2}$/

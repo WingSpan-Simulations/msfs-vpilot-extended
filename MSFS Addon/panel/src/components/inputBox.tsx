@@ -1,4 +1,6 @@
-import { FSComponent, DisplayComponent, VNode, Fragment, ComponentProps, NodeReference } from "msfssdk";
+import {
+    ComponentProps, DisplayComponent, Fragment, FSComponent, NodeReference, VNode
+} from '@microsoft/msfs-sdk';
 
 interface InputBoxProps extends ComponentProps {
     class?: string;

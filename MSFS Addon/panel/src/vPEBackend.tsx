@@ -1,4 +1,4 @@
-import { EventBus, EventSubscriber, Publisher } from "msfssdk";
+import { EventBus, EventSubscriber, Publisher } from '@microsoft/msfs-sdk';
 
 const websocketUri = "ws://127.0.0.1:8080/";
 
@@ -10,7 +10,8 @@ DisconnectedFromNetwork
 ======================================================================
 	OUTGOING MESSAGES
 ConnectToNetwork/Callsign:###/TypeCode:###/SelCal:###
-
+SendFlightPlan/Departure:####/Arrival:####/Alternate:####/CruiseAlt:#####/CruiseSpeed:####/Route:###/Remarks:###/DepartureTime:####/HoursEnroute:##/MinsEnroute:##/HoursFuel:##/MinsFuel:##/Equipment:#/IsVFR:####/File:true
+FetchFlightPlan
 */
 
 interface NetworkConnect {
@@ -45,6 +46,7 @@ export interface FrontendEvents {
 	connectToNetwork: NetworkConnect;
 	disconnectFromNetwork: boolean;
 	fileFlightPlan: FileFlightPlan;
+	fetchFlightPlan: boolean;
 }
 
 export interface Backend {
@@ -80,7 +82,10 @@ export class Backend {
 			// console.log(`SendFlight/Departure:${values.departure}/Arrival:${values.arrival}/Alternate:${values.alternate}/CruiseAlt:${values.cruiseAlt}/CruiseSpeed:${values.cruiseSpeed}/Route:${values.route}/Remarks:${values.remarks}/DepartureTime:${values.departureTime}/HoursEnroute:${values.hoursEnroute}/MinsEnroute:${values.minsEnroute}/HoursFuel:${values.hoursFuel}/MinsFuel:${values.minsFuel}/IsVFR:${values.isVFR}`)
 			this.websocket.send(`SendFlightPlan/Departure:${values.departure}/Arrival:${values.arrival}/Alternate:${values.alternate}/CruiseAlt:${values.cruiseAlt}/CruiseSpeed:${values.cruiseSpeed}/Route:${values.route}/Remarks:${values.remarks}/DepartureTime:${values.departureTime}`)
 			this.websocket.send(`SendFlightPlan/HoursEnroute:${values.hoursEnroute}/MinsEnroute:${values.minsEnroute}/HoursFuel:${values.hoursFuel}/MinsFuel:${values.minsFuel}/EquipmentCode:${values.equipment}/IsVFR:${values.isVFR}/FilePlan:true`)
-			// this.websocket.send(`FileFlightPlan/Null:Null`)
+		})
+
+		this.subscriber.on("fetchFlightPlan").handle(() => {
+			this.websocket.send("FetchFlightPlan")
 		})
 	}
 

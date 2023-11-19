@@ -1,4 +1,7 @@
-import { FSComponent, DisplayComponent, VNode, ComponentProps, Subject, NodeReference } from 'msfssdk';
+import {
+    ComponentProps, DisplayComponent, FSComponent, NodeReference, Subject, VNode
+} from '@microsoft/msfs-sdk';
+
 import { LoadingIcon } from './loadingIcon';
 
 interface AwaitingConnectionProps extends ComponentProps {

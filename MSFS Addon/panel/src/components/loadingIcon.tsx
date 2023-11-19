@@ -1,4 +1,4 @@
-import { FSComponent, DisplayComponent, VNode } from "msfssdk";
+import { DisplayComponent, FSComponent, VNode } from '@microsoft/msfs-sdk';
 
 export class LoadingIcon extends DisplayComponent<any> {
   public render(): VNode {

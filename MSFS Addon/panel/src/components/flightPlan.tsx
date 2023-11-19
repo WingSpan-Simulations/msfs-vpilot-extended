@@ -1,8 +1,11 @@
-import { FSComponent, DisplayComponent, VNode, Fragment, ComponentProps, NodeReference, Publisher } from "msfssdk";
-import { FrontendEvents } from "../vPEBackend";
-import { InputBar } from "./inputBar";
-import { InputBox } from "./inputBox";
-import { ScrollButton } from "./scrollButton";
+import {
+    ComponentProps, DisplayComponent, Fragment, FSComponent, NodeReference, Publisher, VNode
+} from '@microsoft/msfs-sdk';
+
+import { FrontendEvents } from '../vPEBackend';
+import { InputBar } from './inputBar';
+import { InputBox } from './inputBox';
+import { ScrollButton } from './scrollButton';
 
 const alphanumericRegex = /^[A-Za-z0-9]*$/
 const alphabetRegex = /^[A-Za-z]*$/
@@ -18,6 +21,7 @@ interface FlightPlanProps extends ComponentProps {
 export interface FlightPlanPage {
     pageRef: NodeReference<HTMLDivElement>
     fileButtonRef: NodeReference<TemplateElement>;
+    fetchButtonRef: NodeReference<TemplateElement>;
 
     selectedFlightRules: string;
     selectedVoice: string;
@@ -39,6 +43,7 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
 
         this.pageRef = FSComponent.createRef<HTMLDivElement>();
         this.fileButtonRef = FSComponent.createRef<TemplateElement>();
+        this.fetchButtonRef = FSComponent.createRef<TemplateElement>();
 
         this.selectedFlightRules = "instrument"
         this.selectedVoice = "send + receive"
@@ -67,7 +72,6 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
 
     onAfterRender() {
         this.fileButtonRef.instance.addEventListener("click", () => {
-            console.log(this.getVoiceRemark())
             this.props.publisher.pub("fileFlightPlan", {
                 departure: this.departureICAO,
                 arrival: this.arrivalICAO,
@@ -84,6 +88,10 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
                 equipment: this.equipment,
                 isVFR: this.selectedFlightRules == "visual"
             })
+        })
+
+        this.fetchButtonRef.instance.addEventListener("click", () => {
+            this.props.publisher.pub("fetchFlightPlan", true)
         })
     }
 
@@ -241,6 +249,7 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
                     <InputBox onInput={this.onRemarksInput.bind(this)} transformInput={(input) => { return input.toUpperCase() }} class="mx-1" />
                 </virtual-scroll>
                 <new-push-button ref={this.fileButtonRef} class="w-auto mt-2 mx-2 text-center" title="File" />
+                <new-push-button ref={this.fetchButtonRef} class="w-auto mt-2 mx-2 text-center" title="Fetch from server" />
             </div >
         );
     }

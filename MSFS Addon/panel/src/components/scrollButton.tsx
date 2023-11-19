@@ -1,4 +1,6 @@
-import { FSComponent, DisplayComponent, VNode, Fragment, ComponentProps, NodeReference } from "msfssdk";
+import {
+    ComponentProps, DisplayComponent, Fragment, FSComponent, NodeReference, VNode
+} from '@microsoft/msfs-sdk';
 
 interface ScrollButtonProps extends ComponentProps {
     class?: string;
@@ -22,9 +24,7 @@ export class ScrollButton extends DisplayComponent<ScrollButtonProps> {
 
         if (this.valueElement !== undefined)
             this.valueElement.addEventListener("DOMSubtreeModified", () => {
-                console.log("AAAA")
                 let input = this.valueElement?.innerHTML || ""
-                console.log(input)
                 if (this.props.onClick) {
                     this.props.onClick(input)
                 }

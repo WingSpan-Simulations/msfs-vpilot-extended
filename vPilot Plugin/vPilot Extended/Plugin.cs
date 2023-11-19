@@ -67,6 +67,7 @@ namespace vPilotExtended
 
             this.broker.NetworkConnected += new EventHandler<NetworkConnectedEventArgs>(this.NetworkConnectedEvent);
             this.broker.NetworkDisconnected += new EventHandler(this.NetworkDisconnectedEvent);
+            this.broker.FlightPlanReceived += new EventHandler<FlightPlanReceivedEventArgs>(this.FlightPlanReceivedEvent);
             this.broker.BroadcastMessageReceived += new EventHandler<BroadcastMessageReceivedEventArgs>(this.BroadcastMessageReceivedEvent);
             this.broker.PrivateMessageReceived += new EventHandler<PrivateMessageReceivedEventArgs>(this.PrivateMessageReceivedEvent);
             this.broker.RadioMessageReceived += new EventHandler<RadioMessageReceivedEventArgs>(this.RadioMessageReceivedEvent);
@@ -172,10 +173,13 @@ namespace vPilotExtended
                         }
                     }
                     break;
-               // case "fileflightplan":
-               //     this.broker.PostDebugMessage("FLIGHT PLAN FILED");
-               //     this.broker.FileFlightPlan(this.flightPlan.departure, this.flightPlan.arrival, this.flightPlan.alternate, this.flightPlan.cruisealt, this.flightPlan.cruisespeed, this.flightPlan.route, this.flightPlan.remarks, this.flightPlan.heavyaircraft, this.flightPlan.equipmentCode, this.flightPlan.departuretime, this.flightPlan.hoursenroute, this.flightPlan.minsenroute, this.flightPlan.hoursfuel, this.flightPlan.minsfuel, this.flightPlan.vfr);
-               //     break;
+                // case "fileflightplan":
+                //     this.broker.PostDebugMessage("FLIGHT PLAN FILED");
+                //     this.broker.FileFlightPlan(this.flightPlan.departure, this.flightPlan.arrival, this.flightPlan.alternate, this.flightPlan.cruisealt, this.flightPlan.cruisespeed, this.flightPlan.route, this.flightPlan.remarks, this.flightPlan.heavyaircraft, this.flightPlan.equipmentCode, this.flightPlan.departuretime, this.flightPlan.hoursenroute, this.flightPlan.minsenroute, this.flightPlan.hoursfuel, this.flightPlan.minsfuel, this.flightPlan.vfr);
+                //     break;
+                case "fetchflightplan":
+                    this.broker.RequestFlightPlan();
+                    break;
                 case "disconnectfromnetwork":
                     this.broker.RequestDisconnect();
                     break;
@@ -196,6 +200,11 @@ namespace vPilotExtended
             this.typecode = null;
             this.selcal = null;
             await this.server.SendMessage("DisconnectedFromNetwork");
+        }
+
+        public async void FlightPlanReceivedEvent(object sender, FlightPlanReceivedEventArgs e)
+        {
+            await this.server.SendMessage("FlightPlanReceived/Callsign:" + e.Callsign + "/Departure:" + e.DepartureAirport + "/Destination:" + e.DestinationAirport + "/Alternate:" + e.AlternateAirport + "/CruiseAlt" + e.CruiseAltitude + "/CruiseSpeed" + e.CruiseSpeed + "/Route:" + e.Route + "/Remarks:" + e.Remarks + "/EquipmentCode" + e.Equipment + "/DepartureTime" + e.DepartureTime + "/HoursEnroute" + e.EnrouteHours + "/MinsEnroute" + e.EnrouteMinutes + "/HoursFuel" + e.FuelHours + "/MinsFuel" + e.FuelMinutes + "/IsVFR:" + e.IsVfr);
         }
 
         public void PrivateMessageReceivedEvent(object sender, PrivateMessageReceivedEventArgs e)

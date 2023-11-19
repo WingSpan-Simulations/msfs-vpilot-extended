@@ -1,16 +1,11 @@
 import {
-    ComponentProps,
-    DisplayComponent,
-    EventBus,
-    FSComponent,
-    NodeReference,
-    Subject,
-    VNode,
-} from "msfssdk";
-import { AwaitingConnection } from "./components/awaitingConnection";
-import { ConnectPage } from "./components/connectPage";
-import { FlightPlanPage } from "./components/flightPlan";
-import { Backend, BackendEvents, FrontendEvents } from "./vPEBackend";
+    ComponentProps, DisplayComponent, EventBus, FSComponent, NodeReference, Subject, VNode
+} from '@microsoft/msfs-sdk';
+
+import { AwaitingConnection } from './components/awaitingConnection';
+import { ConnectPage } from './components/connectPage';
+import { FlightPlanPage } from './components/flightPlan';
+import { Backend, BackendEvents, FrontendEvents } from './vPEBackend';
 
 const eventBus = new EventBus();
 const subscriber = eventBus.getSubscriber<BackendEvents>();
@@ -18,15 +13,6 @@ const publisher = eventBus.getPublisher<FrontendEvents>();
 const backend = new Backend(eventBus);
 
 type possiblePages = "awaitConnection" | "vatsimConnect" | "flightPlan"
-
-export const checkSimVarLoaded = new Promise(resolve => {
-    const interval = setInterval(() => {
-        if (window.simvar !== undefined) {
-            clearInterval(interval);
-            resolve(true);
-        }
-    });
-});
 
 interface vPEPanelProps extends ComponentProps { }
 interface VPEPanel {
