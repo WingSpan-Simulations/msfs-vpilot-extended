@@ -4,6 +4,7 @@ import {
 } from '@microsoft/msfs-sdk';
 
 import { ButtonGroup } from './components/buttonGroup';
+import { VirtualScroll } from './components/virtualScroll';
 import { AwaitingConnection } from './pages/awaitingConnection';
 import { ConnectPage } from './pages/connectPage';
 import { FlightPlanPage } from './pages/flightPlan';
@@ -31,6 +32,7 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
     private readonly flightPlanRef = FSComponent.createRef<FlightPlanPage>();
     private readonly vatsimConnectRef = FSComponent.createRef<ConnectPage>();
     private readonly disconnectRef = FSComponent.createRef<HTMLElement>();
+    private readonly scrollRef = FSComponent.createRef<VirtualScroll>();
 
     private connection = false;
 
@@ -91,6 +93,8 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
                 ref.instance.hide()
             }
         })
+
+        this.scrollRef.instance.scrollAmount = 0
     }
 
     websocketConnectionStateChanged(open: boolean) {
@@ -149,14 +153,12 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
                         </div>
                     </div>
 
-                    <virtual-scroll class="optionsScroll condensed list-with-buttons hasScrollableContent hasScrollbar" direction="y">
-                        <div class="h-full" id="main">
-                            <AwaitingConnection ref={this.awaitConnectionRef} timeToRetry={this.timeToRetry} />
-                            <FlightPlanPage ref={this.flightPlanRef} bus={this.bus} />
-                            <ConnectPage ref={this.vatsimConnectRef} bus={this.bus} />
-                            <OnlineATC ref={this.onlineATCRef} bus={this.bus} />
-                        </div>
-                    </virtual-scroll>
+                    <VirtualScroll ref={this.scrollRef}>
+                        <AwaitingConnection ref={this.awaitConnectionRef} timeToRetry={this.timeToRetry} />
+                        <FlightPlanPage ref={this.flightPlanRef} bus={this.bus} />
+                        <ConnectPage ref={this.vatsimConnectRef} bus={this.bus} />
+                        <OnlineATC ref={this.onlineATCRef} bus={this.bus} />
+                    </VirtualScroll>
 
                     <div class="condensedPanel" id="footer"></div>
                 </ingame-ui>

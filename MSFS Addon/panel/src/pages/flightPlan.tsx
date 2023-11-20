@@ -206,7 +206,7 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
 
     public render(): VNode {
         return (
-            <div class="hidden" ref={this.pageRef}>
+            <div class="hidden pb-2" ref={this.pageRef}>
                 <virtual-scroll direction="y" scroll-type="auto">
                     <p class="col-span-1 font-semibold px-1">Flight Rules</p>
                     <ScrollButton ref={this.flightRulesInputRef} onClick={this.onFlightRuleInput.bind(this)} class="pt-1" choices={["instrument", "visual"]} />

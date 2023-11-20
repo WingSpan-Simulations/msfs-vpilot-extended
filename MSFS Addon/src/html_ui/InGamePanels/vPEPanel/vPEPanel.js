@@ -20029,6 +20029,138 @@
         }
     }
 
+    class VirtualScroll extends DisplayComponent {
+        constructor() {
+            super(...arguments);
+            this.mainBody = document.querySelector("html");
+            this.containerRef = FSComponent.createRef();
+            this.contentRef = FSComponent.createRef();
+            this.scrollbarRef = FSComponent.createRef();
+            this.viewportHeight = 0;
+            this.lastScroll = 0;
+            this.scrollBarSize = 0;
+            this.scrollPosition = 0;
+            this.scrollAmount = 0;
+            this.maxScroll = 0;
+            this.initialY = 0;
+            this.isScrollDragging = false;
+        }
+        getViewportHeight() {
+            var _a;
+            let cssVariables = ((_a = this.mainBody) === null || _a === void 0 ? void 0 : _a.style.cssText) || '';
+            let viewportMatch = cssVariables.match(VirtualScroll.VIEWPORT_HEIGHT_REGEX);
+            this.viewportHeight = viewportMatch ? Number(viewportMatch[1].trim()) : 0;
+        }
+        update() {
+            this.bounds = this.containerRef.instance.getBoundingClientRect();
+            this.maxScroll = Math.abs((this.bounds.y + this.bounds.height) - this.viewportHeight);
+            if (this.scrollAmount != this.lastScroll) {
+                this.lastScroll = this.scrollAmount;
+                this.contentRef.instance.style.transform = `translateY(${this.scrollAmount}px)`;
+            }
+            this.setScrollBarHeight();
+            this.setScrollBarPosition();
+            this.setScrollBarVisibility();
+            requestAnimationFrame(() => this.update());
+        }
+        scrollingNeeded() {
+            if (this.bounds) {
+                let bottomElementPosition = this.bounds.y + this.bounds.height;
+                return bottomElementPosition > this.viewportHeight;
+            }
+            return false;
+        }
+        handleScrollEvent(event) {
+            if (!this.scrollingNeeded()) {
+                this.scrollAmount = 0;
+            }
+            else {
+                this.scrollAmount -= event.deltaY;
+            }
+            if (this.bounds) {
+                this.scrollAmount = Math.min(0, Math.max(this.scrollAmount, -this.maxScroll));
+            }
+        }
+        setScrollBarVisibility() {
+            let scrollVisible = this.scrollingNeeded();
+            if (scrollVisible && this.scrollbarRef.instance.classList.contains("hidden")) {
+                this.scrollbarRef.instance.classList.remove("hidden");
+                this.containerRef.instance.style.width = "calc(100% - 10px)";
+            }
+            else if (!scrollVisible && !this.scrollbarRef.instance.classList.contains("hidden")) {
+                this.scrollbarRef.instance.classList.add("hidden");
+                this.containerRef.instance.style.width = "100%";
+            }
+        }
+        setScrollBarHeight() {
+            if (this.bounds) {
+                let scrollRequired = this.bounds.y + this.bounds.height;
+                let scrollRatio = (this.viewportHeight - this.bounds.y) / scrollRequired;
+                this.scrollBarSize = Math.floor(Math.min(1, scrollRatio) * (this.viewportHeight - this.bounds.y));
+                let heightString = `${this.scrollBarSize}px`;
+                if (this.scrollbarRef.instance.style.height != heightString) {
+                    this.scrollbarRef.instance.style.height = heightString;
+                }
+            }
+        }
+        setScrollBarPosition() {
+            if (this.bounds) {
+                let scrollPercent = Math.abs(this.scrollAmount / this.maxScroll);
+                let translateString = `translateY(${Math.ceil((this.viewportHeight - this.bounds.y - this.scrollBarSize) * scrollPercent)}px)`;
+                if (this.scrollbarRef.instance.style.transform != translateString) {
+                    this.scrollbarRef.instance.style.transform = translateString;
+                }
+            }
+        }
+        handleScrollMouseDown(event) {
+            this.isScrollDragging = true;
+            this.initialY = event.clientY;
+            this.scrollbarRef.instance.style.backgroundColor = "rgb(255,255,255)";
+        }
+        handleScrollMouseUp(event) {
+            this.isScrollDragging = false;
+            this.scrollbarRef.instance.style.backgroundColor = "var(--primaryColor)";
+        }
+        handleMouseMove(event) {
+            if (this.isScrollDragging && this.bounds && this.scrollingNeeded()) {
+                let newY = event.clientY - this.initialY;
+                let maxScrollBarPosition = this.viewportHeight - this.bounds.y - this.scrollBarSize;
+                let scrollPercent = Math.max(Math.min(newY / maxScrollBarPosition, 1), 0);
+                this.scrollAmount = -scrollPercent * this.maxScroll;
+            }
+        }
+        onAfterRender(node) {
+            this.bounds = this.contentRef.instance.getBoundingClientRect();
+            this.containerRef.instance.addEventListener('wheel', (event) => this.handleScrollEvent(event));
+            this.scrollbarRef.instance.addEventListener('mousedown', (event) => this.handleScrollMouseDown(event));
+            document.addEventListener('mouseup', (event) => this.handleScrollMouseUp(event));
+            document.addEventListener('mousemove', (event) => this.handleMouseMove(event));
+            const styleObserver = new MutationObserver(mutations => {
+                let styleMutation = mutations.find((mutation) => mutation.attributeName == 'style');
+                if (styleMutation) {
+                    this.getViewportHeight();
+                    if (!this.scrollingNeeded()) {
+                        this.scrollAmount = 0;
+                    }
+                    else if (Math.abs(this.scrollAmount) > this.maxScroll) {
+                        this.scrollAmount = -this.maxScroll;
+                    }
+                }
+            });
+            if (this.mainBody) {
+                styleObserver.observe(this.mainBody, { attributes: true, attributeFilter: ["style"] });
+            }
+            this.update();
+        }
+        render() {
+            return (FSComponent.buildComponent("div", { id: "container" },
+                FSComponent.buildComponent("div", { id: "content-container", style: "overflow: hidden; float: left; width: calc(100% - 10px);", ref: this.containerRef },
+                    FSComponent.buildComponent("div", { id: "content", ref: this.contentRef }, this.props.children)),
+                FSComponent.buildComponent("div", { ref: this.scrollbarRef, class: "hover:border-2 border-gray-200", style: "width: 8px; height: 48px; background-color: var(--primaryColor); position: absolute; right: 2px; z-index: 10;", id: "scrollbar" })));
+        }
+    }
+    VirtualScroll.VIEWPORT_HEIGHT_REGEX = /--viewportHeight:\s*([^;]+)/;
+
     class LoadingIcon extends DisplayComponent {
         render() {
             return (FSComponent.buildComponent("div", { id: "loading-icon" },
@@ -20589,7 +20721,7 @@
             this.remarksInputRef.instance.setInputText(flightPlan.remarks);
         }
         render() {
-            return (FSComponent.buildComponent("div", { class: "hidden", ref: this.pageRef },
+            return (FSComponent.buildComponent("div", { class: "hidden pb-2", ref: this.pageRef },
                 FSComponent.buildComponent("virtual-scroll", { direction: "y", "scroll-type": "auto" },
                     FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Flight Rules"),
                     FSComponent.buildComponent(ScrollButton, { ref: this.flightRulesInputRef, onClick: this.onFlightRuleInput.bind(this), class: "pt-1", choices: ["instrument", "visual"] }),
@@ -20944,6 +21076,7 @@
             this.flightPlanRef = FSComponent.createRef();
             this.vatsimConnectRef = FSComponent.createRef();
             this.disconnectRef = FSComponent.createRef();
+            this.scrollRef = FSComponent.createRef();
             this.connection = false;
             checkSimVarLoaded.then(() => {
                 const key = `${SimVar.GetSimVarValue('ATC MODEL', 'string')}.profile_1`;
@@ -20993,6 +21126,7 @@
                     ref.instance.hide();
                 }
             });
+            this.scrollRef.instance.scrollAmount = 0;
         }
         websocketConnectionStateChanged(open) {
             this.connection = open;
@@ -21032,12 +21166,11 @@
                                 FSComponent.buildComponent("span", { class: "font-bold text-base" }, this.callsign)),
                             FSComponent.buildComponent("div", { class: "col-span-2" },
                                 FSComponent.buildComponent("new-push-button", { ref: this.disconnectRef, style: "width: 100%", class: "mt-1", title: "Disconnect" })))),
-                    FSComponent.buildComponent("virtual-scroll", { class: "optionsScroll condensed list-with-buttons hasScrollableContent hasScrollbar", direction: "y" },
-                        FSComponent.buildComponent("div", { class: "h-full", id: "main" },
-                            FSComponent.buildComponent(AwaitingConnection, { ref: this.awaitConnectionRef, timeToRetry: this.timeToRetry }),
-                            FSComponent.buildComponent(FlightPlanPage, { ref: this.flightPlanRef, bus: this.bus }),
-                            FSComponent.buildComponent(ConnectPage, { ref: this.vatsimConnectRef, bus: this.bus }),
-                            FSComponent.buildComponent(OnlineATC, { ref: this.onlineATCRef, bus: this.bus }))),
+                    FSComponent.buildComponent(VirtualScroll, { ref: this.scrollRef },
+                        FSComponent.buildComponent(AwaitingConnection, { ref: this.awaitConnectionRef, timeToRetry: this.timeToRetry }),
+                        FSComponent.buildComponent(FlightPlanPage, { ref: this.flightPlanRef, bus: this.bus }),
+                        FSComponent.buildComponent(ConnectPage, { ref: this.vatsimConnectRef, bus: this.bus }),
+                        FSComponent.buildComponent(OnlineATC, { ref: this.onlineATCRef, bus: this.bus })),
                     FSComponent.buildComponent("div", { class: "condensedPanel", id: "footer" }))));
         }
     }

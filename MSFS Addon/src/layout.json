@@ -17,8 +17,8 @@
     },
     {
       "path": "html_ui/InGamePanels/vPEPanel/vPEPanel.js",
-      "size": 1000042,
-      "date": 133449184696962250
+      "size": 1006857,
+      "date": 133449889052618957
     },
     {
       "path": "html_ui/InGamePanels/vPEPanel/vendor/msfssdk.js",
@@ -27,8 +27,8 @@
     },
     {
       "path": "html_ui/InGamePanels/vPEPanel/vendor/tailwind.css",
-      "size": 14606,
-      "date": 133449184731328215
+      "size": 14735,
+      "date": 133449879596619752
     },
     {
       "path": "InGamePanels/meqolo-vpilot-extender.spb",

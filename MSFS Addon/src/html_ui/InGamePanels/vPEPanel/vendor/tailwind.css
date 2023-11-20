@@ -642,10 +642,6 @@ video {
   height: auto;
 }
 
-.h-full {
-  height: 100%;
-}
-
 .w-auto {
   width: auto;
 }
@@ -706,6 +702,11 @@ video {
 
 .border-b-2 {
   border-bottom-width: 2px;
+}
+
+.border-gray-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(229 231 235 / var(--tw-border-opacity));
 }
 
 .border-gray-500 {
@@ -827,4 +828,8 @@ video {
   transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-backdrop-filter;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
+}
+
+.hover\:border-2:hover {
+  border-width: 2px;
 }
