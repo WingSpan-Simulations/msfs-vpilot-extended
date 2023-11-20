@@ -11,15 +11,15 @@ using System.Threading.Tasks;
  *  
  *  INCOMING EVENTS
  *  ---------------
- *  Event/Arg1Key:Arg1Value/Arg2Key:Arg2Value/...:...
+ *  Event<|>Arg1Key:Arg1Value<|>Arg2Key:Arg2Value<|>...:...
  *  
- *  ConnectToNetwork/Callsign:XXX/TypeCode:XXX/SelCal:XXX
+ *  ConnectToNetwork<|>Callsign:XXX<|>TypeCode:XXX<|>SelCal:XXX
  *  DisconnectFromNetwork
  *  
- *  SendFlightPlan/Argument:Value
+ *  SendFlightPlan<|>Argument:Value
  *  FileFlightPlan
  *  
- *  Flight Plan Arguments = Departure:ICAO/Arrival:ICAO/Alternate:ICAO/CruiseAlt:#####/CruiseSpeed:####/Route:XXXX/Remarks:XXXX/DepartureTime:####/HoursEnroute:##/MinsEnroute:##/HoursFuel:##/MinsFuel:##/IsVFR:[true/false]
+ *  Flight Plan Arguments = Departure:ICAO<|>Arrival:ICAO<|>Alternate:ICAO<|>CruiseAlt:#####<|>CruiseSpeed:####<|>Route:XXXX<|>Remarks:XXXX<|>DepartureTime:####<|>HoursEnroute:##<|>MinsEnroute:##<|>HoursFuel:##<|>MinsFuel:##<|>IsVFR:[true<|>false]
  *
  */
 
@@ -49,7 +49,7 @@ namespace vPilotExtended
     public class vPilotExtended: IPlugin
     {
         private Version Version = new Version(0, 1, 0);
-        private Server server;
+        private NewServer server;
         private IBroker broker;
 
         public FlightPlan flightPlan = new FlightPlan(); 
@@ -67,13 +67,21 @@ namespace vPilotExtended
 
             this.broker.NetworkConnected += new EventHandler<NetworkConnectedEventArgs>(this.NetworkConnectedEvent);
             this.broker.NetworkDisconnected += new EventHandler(this.NetworkDisconnectedEvent);
+       
             this.broker.FlightPlanReceived += new EventHandler<FlightPlanReceivedEventArgs>(this.FlightPlanReceivedEvent);
+            this.broker.NoFlightPlanError += new EventHandler(this.NoFlightPlanEvent);
+
+            this.broker.ControllerAdded += new EventHandler<ControllerAddedEventArgs>(this.ControllerAddedEvent);
+            this.broker.ControllerDeleted += new EventHandler<ControllerDeletedEventArgs>(this.ControllerDeletedEvent);
+            this.broker.ControllerFrequencyChanged += new EventHandler<ControllerFrequencyChangedEventArgs>(this.ControllerFrequencyChangeEvent);
+            this.broker.ControllerLocationChanged += new EventHandler<ControllerLocationChangedEventArgs>(this.ControllerLocationChangeEvent);
+
             this.broker.BroadcastMessageReceived += new EventHandler<BroadcastMessageReceivedEventArgs>(this.BroadcastMessageReceivedEvent);
             this.broker.PrivateMessageReceived += new EventHandler<PrivateMessageReceivedEventArgs>(this.PrivateMessageReceivedEvent);
             this.broker.RadioMessageReceived += new EventHandler<RadioMessageReceivedEventArgs>(this.RadioMessageReceivedEvent);
             this.broker.PostDebugMessage("vPE events connected");
 
-            this.server = new Server(this.broker, this.WebSocketMessageReceivedEvent, this.WebSocketConnectionOpenedEvent);
+            this.server = new NewServer(this.broker, this.WebSocketMessageReceivedEvent, this.WebSocketConnectionOpenedEvent);
             _ = this.server.Initialize(); // use discard operator to suppress warning
             this.broker.PostDebugMessage("vPE server launched");
             this.broker.PostDebugMessage("vPilot Extended loaded");
@@ -83,7 +91,7 @@ namespace vPilotExtended
         {
             if (this.callsign != null)
             {
-                await this.server.SendMessage("NetworkConnectionEstablished/CallSign:" + this.callsign + "/TypeCode:" + this.typecode + "/SelCal:" + this.selcal);
+                await this.server.SendMessage("NetworkConnectionEstablished<|>CallSign:" + this.callsign + "<|>TypeCode:" + this.typecode + "<|>SelCal:" + this.selcal);
             }
         }
 
@@ -92,7 +100,7 @@ namespace vPilotExtended
             string type = "<null>";
             Dictionary<string, string> arguments = new Dictionary<string, string>();
 
-            string[] splitMessage = message.Split('/');
+            string[] splitMessage = message.Split(new string[] { "<|>" }, StringSplitOptions.None);
             for (int i = 0; i < splitMessage.Length; i++)
             {
                 string[] splitString = splitMessage[i].Split(':');
@@ -107,18 +115,12 @@ namespace vPilotExtended
             }
 
             this.broker.PostDebugMessage(message);
-            //this.broker.PostDebugMessage("[WebSocket] Event: " + type + "; Args: " + string.Join(",", arguments));
-
-            //this.broker.PostDebugMessage(type);
 
             switch (type)
             {
                 case "connecttonetwork":
                     this.broker.RequestConnect(arguments["callsign"], arguments["typecode"], arguments["selcal"]);
                     break;
-                //case "fetchflightplan":
-                //    string a = this.broker.RequestFlightPlan() ? "NULL";
-                //    break;
                 case "sendflightplan":
                      foreach (KeyValuePair<string, string> argument in arguments)
                      {
@@ -173,10 +175,6 @@ namespace vPilotExtended
                         }
                     }
                     break;
-                // case "fileflightplan":
-                //     this.broker.PostDebugMessage("FLIGHT PLAN FILED");
-                //     this.broker.FileFlightPlan(this.flightPlan.departure, this.flightPlan.arrival, this.flightPlan.alternate, this.flightPlan.cruisealt, this.flightPlan.cruisespeed, this.flightPlan.route, this.flightPlan.remarks, this.flightPlan.heavyaircraft, this.flightPlan.equipmentCode, this.flightPlan.departuretime, this.flightPlan.hoursenroute, this.flightPlan.minsenroute, this.flightPlan.hoursfuel, this.flightPlan.minsfuel, this.flightPlan.vfr);
-                //     break;
                 case "fetchflightplan":
                     this.broker.RequestFlightPlan();
                     break;
@@ -192,7 +190,7 @@ namespace vPilotExtended
             this.typecode = e.TypeCode;
             this.selcal = e.SelcalCode;
             this.flightPlan.heavyaircraft = HeavyAircraft.Contains(e.TypeCode);
-            await this.server.SendMessage("NetworkConnectionEstablished/CallSign:" + e.Callsign +  "/TypeCode:" + e.TypeCode + "/SelCal:" + e.SelcalCode);
+            await this.server.SendMessage("NetworkConnectionEstablished<|>CallSign:" + e.Callsign +  "<|>TypeCode:" + e.TypeCode + "<|>SelCal:" + e.SelcalCode);
         }
         public async void NetworkDisconnectedEvent(object sender, EventArgs e)
         {
@@ -204,7 +202,33 @@ namespace vPilotExtended
 
         public async void FlightPlanReceivedEvent(object sender, FlightPlanReceivedEventArgs e)
         {
-            await this.server.SendMessage("FlightPlanReceived/Callsign:" + e.Callsign + "/Departure:" + e.DepartureAirport + "/Destination:" + e.DestinationAirport + "/Alternate:" + e.AlternateAirport + "/CruiseAlt" + e.CruiseAltitude + "/CruiseSpeed" + e.CruiseSpeed + "/Route:" + e.Route + "/Remarks:" + e.Remarks + "/EquipmentCode" + e.Equipment + "/DepartureTime" + e.DepartureTime + "/HoursEnroute" + e.EnrouteHours + "/MinsEnroute" + e.EnrouteMinutes + "/HoursFuel" + e.FuelHours + "/MinsFuel" + e.FuelMinutes + "/IsVFR:" + e.IsVfr);
+            await this.server.SendMessage("FlightPlanReceived<|>Callsign:" + e.Callsign + "<|>Departure:" + e.DepartureAirport + "<|>Destination:" + e.DestinationAirport + "<|>Alternate:" + e.AlternateAirport + "<|>CruiseAlt:" + e.CruiseAltitude + "<|>CruiseSpeed:" + e.CruiseSpeed + "<|>Route:" + e.Route + "<|>Remarks:" + e.Remarks + "<|>EquipmentCode:" + e.Equipment + "<|>DepartureTime:" + e.DepartureTime + "<|>HoursEnroute:" + e.EnrouteHours + "<|>MinsEnroute:" + e.EnrouteMinutes + "<|>HoursFuel:" + e.FuelHours + "<|>MinsFuel:" + e.FuelMinutes + "<|>IsVFR:" + e.IsVfr);
+        }
+
+        public void NoFlightPlanEvent(object sender, EventArgs e)
+        {
+            this.broker.PostDebugMessage("No Flight Plan Error");
+        }
+
+        public async void ControllerAddedEvent(object sender, ControllerAddedEventArgs e)
+        {
+            await this.server.SendMessage("ControllerAdded<|>Callsign:" + e.Callsign + "<|>Frequency:" + e.Frequency + "<|>Latitude:" + e.Latitude + "<|>Longitude:" + e.Longitude);
+
+        }
+
+        public async void ControllerDeletedEvent(object sender, ControllerDeletedEventArgs e)
+        {
+            await this.server.SendMessage("ControllerDeleted<|>Callsign:" + e.Callsign);
+        }
+
+        public async void ControllerFrequencyChangeEvent(object sender, ControllerFrequencyChangedEventArgs e)
+        {
+            await this.server.SendMessage("ControllerChangeFreq<|>Callsign:" + e.Callsign + "<|>Frequency:" + e.NewFrequency);
+        }
+
+        public async void ControllerLocationChangeEvent(object sender, ControllerLocationChangedEventArgs e)
+        {
+            await this.server.SendMessage("ControllerChangeLocation<|>Callsign:" + e.Callsign + "<|>Latitude:" + e.NewLatitude + "<|>Longitude:" + e.NewLongitude);
         }
 
         public void PrivateMessageReceivedEvent(object sender, PrivateMessageReceivedEventArgs e)

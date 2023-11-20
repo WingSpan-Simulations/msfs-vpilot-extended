@@ -6235,6 +6235,70 @@
         NavSourceType[NavSourceType["Adf"] = 2] = "Adf";
     })(NavSourceType || (NavSourceType = {}));
 
+    /**
+     * A publisher of clock events.
+     */
+    class ClockPublisher extends BasePublisher {
+        /**
+         * Creates a new instance of ClockPublisher.
+         * @param bus The event bus.
+         * @param pacer An optional pacer to control the rate of publishing.
+         */
+        constructor(bus, pacer) {
+            super(bus, pacer);
+            this.needPublishRealTime = false;
+            this.simVarPublisher = new SimVarPublisher(new Map([
+                ['simTime', { name: 'E:ABSOLUTE TIME', type: SimVarValueType.Seconds, map: ClockPublisher.absoluteTimeToUNIXTime }],
+                ['simRate', { name: 'E:SIMULATION RATE', type: SimVarValueType.Number }]
+            ]), bus, pacer);
+            if (this.bus.getTopicSubscriberCount('realTime') > 0) {
+                this.needPublishRealTime = true;
+            }
+            else {
+                const sub = this.bus.getSubscriber().on('event_bus_topic_first_sub').handle(topic => {
+                    if (topic === 'realTime') {
+                        this.needPublishRealTime = true;
+                        sub.destroy();
+                    }
+                }, true);
+                sub.resume();
+            }
+        }
+        /** @inheritdoc */
+        startPublish() {
+            super.startPublish();
+            this.simVarPublisher.startPublish();
+            if (this.hiFreqInterval === undefined) {
+                this.hiFreqInterval = setInterval(() => this.publish('simTimeHiFreq', ClockPublisher.absoluteTimeToUNIXTime(SimVar.GetSimVarValue('E:ABSOLUTE TIME', 'seconds'))), 0);
+            }
+        }
+        /** @inheritdoc */
+        stopPublish() {
+            super.stopPublish();
+            this.simVarPublisher.stopPublish();
+            if (this.hiFreqInterval !== undefined) {
+                clearInterval(this.hiFreqInterval);
+                this.hiFreqInterval = undefined;
+            }
+        }
+        /** @inheritdoc */
+        onUpdate() {
+            if (this.needPublishRealTime) {
+                this.publish('realTime', Date.now());
+            }
+            this.simVarPublisher.onUpdate();
+        }
+        /**
+         * Converts the sim's absolute time to a UNIX timestamp. The sim's absolute time value is equivalent to a .NET
+         * DateTime.Ticks value (epoch = 00:00:00 01 Jan 0001).
+         * @param absoluteTime an absolute time value, in units of seconds.
+         * @returns the UNIX timestamp corresponding to the absolute time value.
+         */
+        static absoluteTimeToUNIXTime(absoluteTime) {
+            return (absoluteTime - 62135596800) * 1000;
+        }
+    }
+
     /// <reference types="@microsoft/msfs-types/js/common" />
     /**
      * An event bus that can be used to publish data from backend
@@ -6724,6 +6788,112 @@
          */
         static create(consumer, initialValue) {
             return new ConsumerValue(consumer, initialValue);
+        }
+    }
+
+    /**
+     * A subscribable subject which derives its value from an event consumer.
+     */
+    class ConsumerSubject extends AbstractSubscribable {
+        /**
+         * Constructor.
+         * @param consumer The event consumer from which this subject obtains its value. If null, this subject's value will
+         * not be updated until its consumer is set to a non-null value.
+         * @param initialVal This subject's initial value.
+         * @param equalityFunc The function this subject uses check for equality between values.
+         * @param mutateFunc The function this subject uses to change its value. If not defined, variable assignment is used
+         * instead.
+         */
+        constructor(consumer, initialVal, equalityFunc, mutateFunc) {
+            super();
+            this.equalityFunc = equalityFunc;
+            this.mutateFunc = mutateFunc;
+            this.consumerHandler = this.onEventConsumed.bind(this);
+            this._isPaused = false;
+            this.isDestroyed = false;
+            this.value = initialVal;
+            this.consumerSub = consumer === null || consumer === void 0 ? void 0 : consumer.handle(this.consumerHandler);
+        }
+        // eslint-disable-next-line jsdoc/require-returns
+        /**
+         * Whether event consumption is currently paused for this subject. While paused, this subject's value will not
+         * update.
+         */
+        get isPaused() {
+            return this._isPaused;
+        }
+        // eslint-disable-next-line jsdoc/require-jsdoc
+        static create(consumer, initialVal, equalityFunc, mutateFunc) {
+            return new ConsumerSubject(consumer, initialVal, equalityFunc !== null && equalityFunc !== void 0 ? equalityFunc : AbstractSubscribable.DEFAULT_EQUALITY_FUNC, mutateFunc);
+        }
+        /**
+         * Consumes an event.
+         * @param value The value of the event.
+         */
+        onEventConsumed(value) {
+            if (!this.equalityFunc(this.value, value)) {
+                if (this.mutateFunc) {
+                    this.mutateFunc(this.value, value);
+                }
+                else {
+                    this.value = value;
+                }
+                this.notify();
+            }
+        }
+        /**
+         * Sets the consumer from which this subject derives its value. If the consumer is null, this subject's value will
+         * not be updated until a non-null consumer is set.
+         * @param consumer An event consumer.
+         * @returns This subject, after its consumer has been set.
+         */
+        setConsumer(consumer) {
+            var _a;
+            if (this.isDestroyed) {
+                return this;
+            }
+            (_a = this.consumerSub) === null || _a === void 0 ? void 0 : _a.destroy();
+            this.consumerSub = consumer === null || consumer === void 0 ? void 0 : consumer.handle(this.consumerHandler, this._isPaused);
+            return this;
+        }
+        /**
+         * Pauses consuming events for this subject. Once paused, this subject's value will not be updated.
+         * @returns This subject, after it has been paused.
+         */
+        pause() {
+            var _a;
+            if (this._isPaused) {
+                return this;
+            }
+            (_a = this.consumerSub) === null || _a === void 0 ? void 0 : _a.pause();
+            this._isPaused = true;
+            return this;
+        }
+        /**
+         * Resumes consuming events for this subject. Once resumed, this subject's value will be updated from consumed
+         * events.
+         * @returns This subject, after it has been resumed.
+         */
+        resume() {
+            var _a;
+            if (!this._isPaused) {
+                return this;
+            }
+            this._isPaused = false;
+            (_a = this.consumerSub) === null || _a === void 0 ? void 0 : _a.resume(true);
+            return this;
+        }
+        /** @inheritdoc */
+        get() {
+            return this.value;
+        }
+        /**
+         * Destroys this subject. Once destroyed, it will no longer consume events to update its value.
+         */
+        destroy() {
+            var _a;
+            (_a = this.consumerSub) === null || _a === void 0 ? void 0 : _a.destroy();
+            this.isDestroyed = true;
         }
     }
 
@@ -11893,6 +12063,162 @@
         FlightTimerMode[FlightTimerMode["CountingDown"] = 0] = "CountingDown";
         FlightTimerMode[FlightTimerMode["CountingUp"] = 1] = "CountingUp";
     })(FlightTimerMode || (FlightTimerMode = {}));
+
+    /// <reference types="@microsoft/msfs-types/js/simplane" />
+    /**
+     * A publisher for global positioning and inertial data.
+     */
+    class GNSSPublisher extends BasePublisher {
+        /**
+         * Create an GNSSPublisher
+         * @param bus The EventBus to publish to
+         * @param pacer An optional pacer to use to control the rate of publishing
+         */
+        constructor(bus, pacer = undefined) {
+            super(bus, pacer);
+            this.vec3Cache = [Vec3Math.create(), Vec3Math.create()];
+            this.simVarPublisher = new SimVarPublisher(new Map([
+                ['zulu_time', { name: 'E:ZULU TIME', type: SimVarValueType.Seconds }],
+                ['time_of_day', { name: 'E:TIME OF DAY', type: SimVarValueType.Number }],
+                ['ground_speed', { name: 'GROUND VELOCITY', type: SimVarValueType.Knots }],
+                ['inertial_vertical_speed', { name: 'VELOCITY WORLD Y', type: SimVarValueType.FPM }]
+            ]), this.bus, this.pacer);
+            this.needPublish = {
+                'gps-position': false,
+                'track_deg_true': false,
+                'track_deg_magnetic': false,
+                'magvar': false,
+                'inertial_speed': false,
+                'inertial_acceleration': false,
+                'inertial_track_acceleration': false
+            };
+            for (const topic in this.needPublish) {
+                this.needPublish[topic] = bus.getTopicSubscriberCount(topic) > 0;
+            }
+            bus.getSubscriber().on('event_bus_topic_first_sub').handle(this.onTopicSubscribed.bind(this));
+        }
+        /**
+         * Responds to when a topic is first subscribed to on the event bus.
+         * @param topic The subscribed topic.
+         */
+        onTopicSubscribed(topic) {
+            if (topic in this.needPublish) {
+                this.needPublish[topic] = true;
+                if (this.publishActive) {
+                    switch (topic) {
+                        case 'gps-position':
+                            this.publishPosition();
+                            break;
+                        case 'track_deg_true':
+                            this.publishTrack(true, false, false);
+                            break;
+                        case 'track_deg_magnetic':
+                            this.publishTrack(false, true, false);
+                            break;
+                        case 'magvar':
+                            this.publishTrack(false, false, true);
+                            break;
+                        case 'inertial_speed':
+                            this.publishInertialData(true, false, false);
+                            break;
+                        case 'inertial_acceleration':
+                            this.publishInertialData(false, true, false);
+                            break;
+                        case 'inertial_track_acceleration':
+                            this.publishInertialData(false, false, true);
+                            break;
+                    }
+                }
+            }
+        }
+        /** @inheritdoc */
+        startPublish() {
+            super.startPublish();
+            this.simVarPublisher.startPublish();
+        }
+        /** @inheritdoc */
+        stopPublish() {
+            super.stopPublish();
+            this.simVarPublisher.stopPublish();
+        }
+        /** @inheritdoc */
+        onUpdate() {
+            this.needPublish['gps-position'] && this.publishPosition();
+            this.publishTrack(this.needPublish['track_deg_true'], this.needPublish['track_deg_magnetic'], this.needPublish['magvar']);
+            this.publishInertialData(this.needPublish['inertial_speed'], this.needPublish['inertial_acceleration'], this.needPublish['inertial_track_acceleration']);
+            this.simVarPublisher.onUpdate();
+        }
+        /**
+         * Publishes the gps-position event.
+         */
+        publishPosition() {
+            const lat = SimVar.GetSimVarValue('PLANE LATITUDE', SimVarValueType.Degree);
+            const lon = SimVar.GetSimVarValue('PLANE LONGITUDE', SimVarValueType.Degree);
+            const alt = SimVar.GetSimVarValue('PLANE ALTITUDE', SimVarValueType.Meters);
+            this.publish('gps-position', new LatLongAlt(lat, lon, alt));
+        }
+        /**
+         * Publishes the `track_deg_true`, `track_deg_magnetic`, and `magvar` topics.
+         * @param publishTrue Whether to publish the `track_deg_true` topic.
+         * @param publishMagnetic Whether to publish the `track_deg_magnetic` topic.
+         * @param publishMagvar Whether to publish the `magvar` topic.
+         */
+        publishTrack(publishTrue, publishMagnetic, publishMagvar) {
+            let trueTrack = 0;
+            let magneticTrack = 0;
+            let magvar = 0;
+            if (publishTrue || publishMagnetic) {
+                const headingTrue = SimVar.GetSimVarValue('PLANE HEADING DEGREES TRUE', SimVarValueType.Degree);
+                trueTrack = GNSSPublisher.getInstantaneousTrack(headingTrue);
+            }
+            if (publishMagvar || publishMagnetic) {
+                magvar = SimVar.GetSimVarValue('MAGVAR', SimVarValueType.Degree);
+                if (publishMagnetic) {
+                    magneticTrack = NavMath.normalizeHeading(trueTrack - magvar);
+                }
+            }
+            publishTrue && this.publish('track_deg_true', trueTrack);
+            publishMagnetic && this.publish('track_deg_magnetic', magneticTrack);
+            publishMagvar && this.publish('magvar', magvar);
+        }
+        /**
+         * Publishes the `inertial_speed`, `inertial_acceleration`, and `inertial_track_acceleration` topics.
+         * @param publishSpeed Whether to publish the `inertial_speed` topic.
+         * @param publishAcceleration Whether to publish the `inertial_acceleration` topic.
+         * @param publishTrackAcceleration Whether to publish the `inertial_track_acceleration` topic.
+         */
+        publishInertialData(publishSpeed, publishAcceleration, publishTrackAcceleration) {
+            const velocityVec = this.vec3Cache[0];
+            const accelerationVec = this.vec3Cache[1];
+            let speed = 0;
+            let acceleration = 0;
+            if (publishSpeed || publishTrackAcceleration) {
+                Vec3Math.set(SimVar.GetSimVarValue('VELOCITY BODY X', SimVarValueType.MetersPerSecond), SimVar.GetSimVarValue('VELOCITY BODY Y', SimVarValueType.MetersPerSecond), SimVar.GetSimVarValue('VELOCITY BODY Z', SimVarValueType.MetersPerSecond), velocityVec);
+                speed = Vec3Math.abs(velocityVec);
+            }
+            if (publishAcceleration || publishTrackAcceleration) {
+                Vec3Math.set(SimVar.GetSimVarValue('ACCELERATION BODY X', SimVarValueType.MetersPerSecond), SimVar.GetSimVarValue('ACCELERATION BODY Y', SimVarValueType.MetersPerSecond), SimVar.GetSimVarValue('ACCELERATION BODY Z', SimVarValueType.MetersPerSecond), accelerationVec);
+                acceleration = Vec3Math.abs(accelerationVec);
+            }
+            publishSpeed && this.publish('inertial_speed', speed);
+            publishAcceleration && this.publish('inertial_acceleration', acceleration);
+            publishTrackAcceleration && this.publish('inertial_track_acceleration', speed === 0 ? acceleration : Vec3Math.dot(accelerationVec, velocityVec) / speed);
+        }
+        /**
+         * Gets the instantaneous true track.
+         * @param headingTrue The true heading, in degrees.
+         * @returns The true track, in degrees.
+         */
+        static getInstantaneousTrack(headingTrue = 0) {
+            const velocityEW = SimVar.GetSimVarValue('VELOCITY WORLD X', SimVarValueType.Knots);
+            const velocityNS = SimVar.GetSimVarValue('VELOCITY WORLD Z', SimVarValueType.Knots);
+            let track = headingTrue;
+            if (velocityEW !== 0 || velocityNS !== 0) {
+                track = NavMath.normalizeHeading(Math.atan2(velocityEW, velocityNS) * Avionics.Utils.RAD2DEG);
+            }
+            return track;
+        }
+    }
 
     /**
      * SBAS group names.
@@ -19247,6 +19573,367 @@
      * Configures the {@link FmcPageLifecyclePolicy} for this page
      */
     FmcPageLifecyclePolicy.Singleton;
+
+    /**
+     * A manager for user settings. Provides settings using their names as keys, publishes value change events on the
+     * event bus, and keeps setting values up to date when receiving change events across the bus.
+     */
+    class DefaultUserSettingManager {
+        /**
+         * Constructor.
+         * @param bus The bus used by this manager to publish setting change events.
+         * @param settingDefs The setting definitions used to initialize this manager's settings.
+         * @param keepLocal If present and true, values will be kept local to the instrument on which they're set.
+         */
+        constructor(bus, settingDefs, keepLocal = false) {
+            this.bus = bus;
+            this.publisher = this.bus.getPublisher();
+            this.subscriber = this.bus.getSubscriber();
+            this.syncPublisher = this.bus.getPublisher();
+            this.syncSubscriber = this.bus.getSubscriber();
+            this.keepLocal = keepLocal;
+            this.settings = new Map(settingDefs.map(def => {
+                const initTopic = `usersetting_init_${def.name}`;
+                const syncTopic = `usersetting_sync_${def.name}`;
+                const entry = {
+                    syncTopic,
+                    syncTime: 0,
+                    initUid: Math.round(Math.random() * Number.MAX_SAFE_INTEGER)
+                };
+                entry.setting = new SyncableUserSetting(def, this.onSettingValueChanged.bind(this, entry));
+                entry.initSub = this.syncSubscriber.on(initTopic).handle(data => {
+                    // Do not respond to our own initialization sync.
+                    if (data.uid === entry.initUid) {
+                        return;
+                    }
+                    // If we receive an initialization sync event for a setting, that means a manager on another instrument tried
+                    // to initialize the same setting to its default value. However, since the setting already exists here, we will
+                    // send a response to override the initialized value with the existing value.
+                    this.syncPublisher.pub(entry.syncTopic, { value: entry.setting.value, syncTime: entry.syncTime, initUid: data.uid }, !this.keepLocal, true);
+                }, true);
+                // Because sync events are cached, the initial subscriptions to the sync topic below will grab the synced value
+                // of the new setting if it exists on the local instrument (e.g. if the value was synced from another instrument
+                // after the local instrument was created but before this manager and local setting were created).
+                this.syncSubscriber.on(syncTopic).handle(this.onSettingValueSynced.bind(this, entry));
+                if (entry.syncTime === 0) {
+                    // If the new setting has no synced value on the local instrument, we will try to grab an initialization value
+                    // instead. If one exists, we will use it, but keep the local sync time at 0. If there is a pending response
+                    // to this initialization value, we want to be ready to accept the response when it arrives, which we can't do
+                    // if the local sync time is non-zero).
+                    const sub = this.syncSubscriber.on(initTopic).handle(data => {
+                        this.onSettingValueSynced(entry, { value: data.value, syncTime: 0 });
+                    });
+                    sub.destroy();
+                }
+                if (entry.syncTime === 0) {
+                    // An existing synced value does not exist for the new setting on the local instrument, so we will go ahead
+                    // and initialize the new setting value to its default and send an initialization sync event. If the setting
+                    // exists on other instruments, their managers will send an initialization response to override our initialized
+                    // value.
+                    this.syncPublisher.pub(initTopic, { value: entry.setting.value, syncTime: Date.now(), uid: entry.initUid }, !this.keepLocal, true);
+                    this.publisher.pub(entry.setting.definition.name, entry.setting.value, false, true);
+                }
+                entry.initSub.resume();
+                return [def.name, entry];
+            }));
+        }
+        /** @inheritdoc */
+        tryGetSetting(name) {
+            var _a;
+            return (_a = this.settings.get(name)) === null || _a === void 0 ? void 0 : _a.setting;
+        }
+        /** @inheritdoc */
+        getSetting(name) {
+            const setting = this.tryGetSetting(name);
+            if (setting === undefined) {
+                throw new Error(`DefaultUserSettingManager: Could not find setting with name ${name}`);
+            }
+            return setting;
+        }
+        /** @inheritdoc */
+        getAllSettings() {
+            return Array.from(this.settings.values(), entry => entry.setting);
+        }
+        /** @inheritdoc */
+        whenSettingChanged(name) {
+            const setting = this.settings.get(name);
+            if (!setting) {
+                throw new Error(`DefaultUserSettingManager: Could not find setting with name ${name}`);
+            }
+            return this.subscriber.on(name).whenChanged();
+        }
+        /** @inheritdoc */
+        mapTo(map) {
+            return new MappedUserSettingManager(this, map);
+        }
+        /**
+         * A callback which is called when one of this manager's settings has its value changed locally.
+         * @param entry The entry for the setting that was changed.
+         * @param value The new value of the setting.
+         */
+        onSettingValueChanged(entry, value) {
+            entry.syncTime = Date.now();
+            this.syncPublisher.pub(entry.syncTopic, { value, syncTime: entry.syncTime }, !this.keepLocal, true);
+        }
+        /**
+         * A callback which is called when a setting changed event is received over the event bus.
+         * @param entry The entry for the setting that was changed.
+         * @param data The sync data.
+         */
+        onSettingValueSynced(entry, data) {
+            // If the sync event is an initialization response, ignore it if the local setting value has already been synced.
+            // Otherwise, protect against race conditions by not responding to sync events older than the last time this
+            // manager synced the setting.
+            if ((data.initUid !== undefined && entry.syncTime !== 0)
+                || (data.initUid === undefined && data.syncTime < entry.syncTime)) {
+                return;
+            }
+            this.syncSettingFromEvent(entry, data);
+        }
+        /**
+         * Syncs a setting using data received from a sync event.
+         * @param entry The entry for the setting to sync.
+         * @param data The sync event data.
+         */
+        syncSettingFromEvent(entry, data) {
+            entry.syncTime = data.syncTime;
+            entry.setting.syncValue(data.value);
+            // Publish the public setting change event. Do NOT sync across the bus because doing so can result in older events
+            // being received after newer events.
+            this.publisher.pub(entry.setting.definition.name, entry.setting.value, false, true);
+        }
+    }
+    /**
+     * A manager for user settings. Provides settings using their names as keys, publishes value change events on the
+     * event bus, and keeps setting values up to date when receiving change events across the bus, using a mapping from
+     * abstracted settings keys to true underlying settings keys.
+     */
+    class MappedUserSettingManager {
+        /**
+         * Creates an instance of a MappedUserSettingManager.
+         * @param parent The parent setting manager.
+         * @param map The map of abstracted keys to true underlying keys.
+         */
+        constructor(parent, map) {
+            this.parent = parent;
+            this.map = map;
+        }
+        /** @inheritdoc */
+        tryGetSetting(name) {
+            var _a;
+            const mappedName = ((_a = this.map[name]) !== null && _a !== void 0 ? _a : name);
+            return this.parent.tryGetSetting(mappedName);
+        }
+        /** @inheritdoc */
+        getSetting(name) {
+            var _a;
+            const mappedName = ((_a = this.map[name]) !== null && _a !== void 0 ? _a : name);
+            return this.parent.getSetting(mappedName);
+        }
+        /** @inheritdoc */
+        whenSettingChanged(name) {
+            var _a;
+            const mappedName = ((_a = this.map[name]) !== null && _a !== void 0 ? _a : name);
+            return this.parent.whenSettingChanged(mappedName);
+        }
+        /** @inheritdoc */
+        getAllSettings() {
+            return this.parent.getAllSettings();
+        }
+        /** @inheritdoc */
+        mapTo(map) {
+            return new MappedUserSettingManager(this, map);
+        }
+    }
+    /**
+     * An implementation of a user setting which can be synced across multiple instances.
+     */
+    class SyncableUserSetting extends AbstractSubscribable {
+        /**
+         * Constructor.
+         * @param definition This setting's definition.
+         * @param valueChangedCallback A function to be called whenever the value of this setting changes.
+         */
+        constructor(definition, valueChangedCallback) {
+            super();
+            this.definition = definition;
+            this.valueChangedCallback = valueChangedCallback;
+            this.isMutableSubscribable = true;
+            this._value = definition.defaultValue;
+        }
+        // eslint-disable-next-line jsdoc/require-returns
+        /** This setting's current value. */
+        get value() {
+            return this._value;
+        }
+        // eslint-disable-next-line jsdoc/require-jsdoc
+        set value(v) {
+            if (this._value === v) {
+                return;
+            }
+            this._value = v;
+            this.valueChangedCallback(v);
+            this.notify();
+        }
+        /**
+         * Syncs this setting to a value. This will not trigger a call to valueChangedCallback.
+         * @param value The value to which to sync.
+         */
+        syncValue(value) {
+            if (this._value === value) {
+                return;
+            }
+            this._value = value;
+            this.notify();
+        }
+        /** @inheritdoc */
+        get() {
+            return this._value;
+        }
+        /**
+         * Sets the value of this setting.
+         * @param value The new value.
+         */
+        set(value) {
+            this.value = value;
+        }
+        /** @inheritdoc */
+        resetToDefault() {
+            this.set(this.definition.defaultValue);
+        }
+    }
+
+    /**
+     * A manager for user settings that are saved and persistent across flight sessions. The manager facilitates saving
+     * and loading setting values to and from multiple keyed save slots and also supports auto-saving. Uses Data Store to
+     * store saved setting values.
+     */
+    class UserSettingSaveManager {
+        /**
+         * Constructor.
+         * @param settings This manager's managed settings.
+         * @param bus The event bus.
+         */
+        constructor(settings, bus) {
+            this.autoSaveKeys = new Set();
+            this.isAlive = true;
+            const subscriber = bus.getSubscriber();
+            this.entries = Array.from(settings, setting => {
+                const autoSaveDataStoreKeys = [];
+                return {
+                    setting,
+                    subscription: subscriber.on(setting.definition.name).whenChanged().handle(this.onSettingChanged.bind(this, autoSaveDataStoreKeys), true),
+                    autoSaveDataStoreKeys
+                };
+            });
+        }
+        /**
+         * A callback which is called when a setting's value changes.
+         * @param autoSaveDataStoreKeys The data store keys to which the setting's value should be automatically saved.
+         * @param value The new value of the setting.
+         */
+        onSettingChanged(autoSaveDataStoreKeys, value) {
+            const len = autoSaveDataStoreKeys.length;
+            for (let i = 0; i < len; i++) {
+                DataStore.set(autoSaveDataStoreKeys[i], value);
+            }
+        }
+        /**
+         * Loads the saved values of this manager's settings.
+         * @param key The key from which to load the values.
+         * @throws Error if this manager has been destroyed.
+         */
+        load(key) {
+            if (!this.isAlive) {
+                throw new Error('UserSettingSaveManager: cannot load using a destroyed manager.');
+            }
+            for (let i = 0; i < this.entries.length; i++) {
+                const entry = this.entries[i];
+                const dataStoreKey = UserSettingSaveManager.getDataStoreKey(entry.setting, key);
+                const storedValue = DataStore.get(dataStoreKey);
+                if (storedValue !== undefined) {
+                    entry.setting.value = storedValue;
+                }
+            }
+        }
+        /**
+         * Saves the current values of this manager's settings.
+         * @param key The key to which to save the values.
+         * @throws Error if this manager has been destroyed.
+         */
+        save(key) {
+            if (!this.isAlive) {
+                throw new Error('UserSettingSaveManager: cannot save using a destroyed manager.');
+            }
+            for (let i = 0; i < this.entries.length; i++) {
+                const entry = this.entries[i];
+                const dataStoreKey = UserSettingSaveManager.getDataStoreKey(entry.setting, key);
+                DataStore.set(dataStoreKey, entry.setting.value);
+            }
+        }
+        /**
+         * Starts automatically saving this manager's settings when their values change.
+         * @param key The key to which to save the values.
+         * @throws Error if this manager has been destroyed.
+         */
+        startAutoSave(key) {
+            if (!this.isAlive) {
+                throw new Error('UserSettingSaveManager: cannot start autosave using a destroyed manager.');
+            }
+            if (this.autoSaveKeys.has(key)) {
+                return;
+            }
+            for (let i = 0; i < this.entries.length; i++) {
+                const entry = this.entries[i];
+                entry.autoSaveDataStoreKeys.push(UserSettingSaveManager.getDataStoreKey(entry.setting, key));
+                if (entry.autoSaveDataStoreKeys.length === 1) {
+                    entry.subscription.resume();
+                }
+            }
+        }
+        /**
+         * Stops automatically saving this manager's settings when their values change.
+         * @param key The key to which to stop saving the values.
+         * @throws Error if this manager has been destroyed.
+         */
+        stopAutoSave(key) {
+            if (!this.isAlive) {
+                throw new Error('UserSettingSaveManager: cannot stop autosave using a destroyed manager.');
+            }
+            if (!this.autoSaveKeys.has(key)) {
+                return;
+            }
+            for (let i = 0; i < this.entries.length; i++) {
+                const entry = this.entries[i];
+                entry.autoSaveDataStoreKeys.splice(entry.autoSaveDataStoreKeys.indexOf(UserSettingSaveManager.getDataStoreKey(entry.setting, key)), 1);
+                if (entry.autoSaveDataStoreKeys.length === 0) {
+                    entry.subscription.pause();
+                }
+            }
+        }
+        /**
+         * Destroys this manager. Once this manager is destroyed, all active autosaves will be stopped, and attempting to
+         * save, load, or start another autosave from this manager will cause an error to be thrown.
+         */
+        destroy() {
+            const len = this.entries.length;
+            for (let i = 0; i < len; i++) {
+                this.entries[i].subscription.destroy();
+            }
+            this.entries.length = 0;
+            this.isAlive = false;
+        }
+        /**
+         * Gets a data store key for a specific setting and save key.
+         * @param setting A user setting.
+         * @param saveKey The save key.
+         * @returns the data store key for the setting and save key.
+         */
+        static getDataStoreKey(setting, saveKey) {
+            return `${UserSettingSaveManager.DATASTORE_PREFIX}.${saveKey}.${setting.definition.name}`;
+        }
+    }
+    UserSettingSaveManager.DATASTORE_PREFIX = 'persistent-setting';
     new GeoPoint(0, 0);
 
     /**
@@ -19316,6 +20003,32 @@
         }
     }
 
+    class ButtonGroup extends DisplayComponent {
+        constructor() {
+            super(...arguments);
+            this.groupRef = FSComponent.createRef();
+            this.selectedButton = this.props.buttons[0];
+        }
+        onAfterRender(node) {
+            this.props.buttons.forEach((buttonTitle, index) => {
+                FSComponent.render(FSComponent.buildComponent("tabmenu-item", { "tab-id": `Tab${index}`, tabindex: index, id: `TabSwitch${index}`, title: buttonTitle }), this.groupRef.instance);
+            });
+            this.groupRef.instance.addEventListener("tab-select", (event) => this.handleInput(event));
+        }
+        handleInput(event) {
+            this.selectedButton = this.props.buttons[event.tabMenuItem.tabIndex];
+            if (this.props.onInput) {
+                this.props.onInput(this.selectedButton);
+            }
+        }
+        getButtonGroup() {
+            return this.groupRef;
+        }
+        render() {
+            return (FSComponent.buildComponent("tab-menu", { ref: this.groupRef, selectedIndex: "0" }));
+        }
+    }
+
     class LoadingIcon extends DisplayComponent {
         render() {
             return (FSComponent.buildComponent("div", { id: "loading-icon" },
@@ -19352,41 +20065,13 @@
         }
     }
 
-    const checkSimVarLoaded = new Promise(resolve => {
-        const interval = setInterval(() => {
-            if (window.simvar !== undefined) {
-                clearInterval(interval);
-                resolve(true);
-            }
-        });
-    });
-
     class InputBar extends DisplayComponent {
-        constructor(props) {
-            super(props);
+        constructor() {
+            super(...arguments);
             this.ref = FSComponent.createRef();
         }
         onAfterRender(node) {
-            this.ref.instance.addEventListener("input", () => {
-                let input = this.ref.instance._valueStr;
-                if (input !== undefined) {
-                    if (this.props.transformInput) {
-                        input = this.props.transformInput(input);
-                        this.ref.instance.setValue(input);
-                    }
-                    if (this.props.onInput) {
-                        this.props.onInput(input, this.ref);
-                    }
-                    if (this.props.requireInput) {
-                        if (input == "") {
-                            this.setInputError();
-                        }
-                        else {
-                            this.setInputError(true);
-                        }
-                    }
-                }
-            });
+            this.ref.instance.addEventListener("input", () => this.onInputSent());
             if (this.props.requireInput) {
                 this.setInputError();
             }
@@ -19399,6 +20084,30 @@
                 this.ref.instance.classList.remove("error");
             }
         }
+        onInputSent() {
+            let input = this.ref.instance._valueStr;
+            if (input !== undefined) {
+                if (this.props.transformInput) {
+                    input = this.props.transformInput(input);
+                    this.ref.instance.setValue(input);
+                }
+                if (this.props.onInput) {
+                    this.props.onInput(input, this.ref);
+                }
+                if (this.props.requireInput) {
+                    if (input == "") {
+                        this.setInputError();
+                    }
+                    else {
+                        this.setInputError(true);
+                    }
+                }
+            }
+        }
+        setInputText(input) {
+            this.ref.instance.setValue(input);
+            this.onInputSent();
+        }
         getInputBar() {
             return this.ref;
         }
@@ -19406,6 +20115,54 @@
             return (FSComponent.buildComponent("ui-input", { ref: this.ref, class: this.props.class, id: this.props.id, type: "text", "no-tooltip": true, "no-key-navigation": true, "not-pad-interactive": true, idevent: "0" }));
         }
     }
+
+    class AircraftSaveManager extends DefaultUserSettingManager {
+        constructor(bus) {
+            super(bus, [
+                { name: 'callsign', defaultValue: '' },
+                { name: 'selcal', defaultValue: '' }
+            ]);
+        }
+    }
+    class FlightPlanSaveManager extends DefaultUserSettingManager {
+        constructor(bus) {
+            super(bus, [
+                { name: 'isVFR', defaultValue: false },
+                { name: 'voice', defaultValue: 'send + receive' },
+                { name: 'departureAirport', defaultValue: '' },
+                { name: 'arrivalAirport', defaultValue: '' },
+                { name: 'alternateAirport', defaultValue: '' },
+                { name: 'departureTime', defaultValue: 0 },
+                { name: 'equipmentSuffix', defaultValue: 'L' },
+                { name: 'hoursEnroute', defaultValue: 0 },
+                { name: 'minsEnroute', defaultValue: 0 },
+                { name: 'hoursFuel', defaultValue: 0 },
+                { name: 'minsFuel', defaultValue: 0 },
+                { name: 'cruiseSpeed', defaultValue: 0 },
+                { name: 'cruiseAltitude', defaultValue: 0 },
+                { name: 'route', defaultValue: '' },
+                { name: 'remarks', defaultValue: '' },
+            ]);
+        }
+    }
+    class vPESettingSaveManager extends UserSettingSaveManager {
+        constructor(bus) {
+            const settings = [
+                ...new AircraftSaveManager(bus).getAllSettings(),
+                ...new FlightPlanSaveManager(bus).getAllSettings()
+            ];
+            super(settings, bus);
+        }
+    }
+
+    const checkSimVarLoaded = new Promise(resolve => {
+        const interval = setInterval(() => {
+            if (window.simvar !== undefined) {
+                clearInterval(interval);
+                resolve(true);
+            }
+        });
+    });
 
     const alphanumericRegex$1 = /^[A-Za-z0-9]*$/;
     const selcalRegex = /^[A-Za-z]{2}-[A-Za-z]{2}$/;
@@ -19428,6 +20185,8 @@
     class ConnectPage extends DisplayComponent {
         constructor(props) {
             super(props);
+            this.publisher = this.props.bus.getPublisher();
+            this.aircraftSetting = new AircraftSaveManager(this.props.bus);
             this.callsign = "";
             this.aircraft = "";
             this.selcal = "";
@@ -19457,10 +20216,16 @@
             this.setInputColours(this.callsignRef.instance.getInputBar());
             this.renderErrors();
             checkSimVarLoaded.then(() => {
-                let aircraftModel = Utils.Translate(SimVar.GetSimVarValue("ATC MODEL", "string"));
-                this.aircraftRef.instance.getInputBar().instance.setValue(aircraftModel);
-                this.aircraft = aircraftModel;
+                this.setTextFromSettings();
             });
+        }
+        setTextFromSettings() {
+            let callsign = this.aircraftSetting.getSetting('callsign').get();
+            let selcal = this.aircraftSetting.getSetting('selcal').get();
+            let aircraftModel = Utils.Translate(SimVar.GetSimVarValue("ATC MODEL", "string"));
+            this.aircraftRef.instance.setInputText(aircraftModel);
+            this.callsignRef.instance.setInputText(callsign);
+            this.selcalRef.instance.setInputText(selcal);
         }
         checkInputErrors(input, ref, errorChecks) {
             let errors = [];
@@ -19506,7 +20271,7 @@
         connectToServer() {
             let errors = flatten(Object.values(this.errors.get()));
             if (errors.length == 0) {
-                this.props.publisher.pub("connectToNetwork", {
+                this.publisher.pub("connectToNetwork", {
                     callsign: this.callsign,
                     aircraft: this.aircraft,
                     selcal: this.selcal
@@ -19544,7 +20309,7 @@
             this.selcal = input;
             let errors = Object.assign({}, this.errors.get());
             errors.selcal = this.checkInputErrors(this.selcal, ref, [
-                (input) => (input.length != 0 || selcalRegex.test(this.selcal) !== true) && inputErrors.selcal
+                (input) => (input.length != 0 && selcalRegex.test(this.selcal) !== true) && inputErrors.selcal
             ]);
             this.errors.set(errors);
         }
@@ -19558,10 +20323,10 @@
                     FSComponent.buildComponent("div", { id: "errorHolder", class: "pl-2 flex flex-col" })),
                 FSComponent.buildComponent("div", { class: "grid grid-cols-4 mt-4" },
                     FSComponent.buildComponent("p", { class: "col-span-2 font-semibold" }, "Callsign"),
-                    FSComponent.buildComponent(InputBar, { ref: this.callsignRef, onInput: this.onCallsignInput.bind(this), transformInput: (input) => { return this.transformInput(input, 7, alphanumericRegex$1); }, id: "callsign", class: "col-span-2" })),
+                    FSComponent.buildComponent(InputBar, { ref: this.callsignRef, requireInput: true, onInput: this.onCallsignInput.bind(this), transformInput: (input) => { return this.transformInput(input, 7, alphanumericRegex$1); }, id: "callsign", class: "col-span-2" })),
                 FSComponent.buildComponent("div", { class: "grid grid-cols-4 mt-2" },
                     FSComponent.buildComponent("p", { class: "col-span-2 font-semibold" }, "Aircraft Code"),
-                    FSComponent.buildComponent(InputBar, { ref: this.aircraftRef, onInput: this.onAircraftInput.bind(this), transformInput: (input) => { return this.transformInput(input, 4, alphanumericRegex$1); }, id: "aircraftCode", class: "col-span-2" })),
+                    FSComponent.buildComponent(InputBar, { ref: this.aircraftRef, requireInput: true, onInput: this.onAircraftInput.bind(this), transformInput: (input) => { return this.transformInput(input, 4, alphanumericRegex$1); }, id: "aircraftCode", class: "col-span-2" })),
                 FSComponent.buildComponent("div", { class: "grid grid-cols-4 mt-2" },
                     FSComponent.buildComponent("p", { class: "col-span-2 font-semibold" }, "SelCal Code"),
                     FSComponent.buildComponent(InputBar, { ref: this.selcalRef, onInput: this.onSelcalInput.bind(this), transformInput: (input) => { return this.transformInput(input, 5, selcalRegex); }, id: "callsign", class: "col-span-2" })),
@@ -19585,18 +20350,24 @@
             this.ref.instance.addEventListener("unload", () => {
                 Coherent.trigger('UNFOCUS_INPUT_FIELD', this.uuid);
             });
-            this.ref.instance.addEventListener("input", () => {
-                let input = this.ref.instance.value;
-                if (input !== undefined) {
-                    if (this.props.transformInput) {
-                        input = this.props.transformInput(input);
-                        this.ref.instance.value = input;
-                    }
-                    if (this.props.onInput) {
-                        this.props.onInput(input, this.ref);
-                    }
+            this.ref.instance.addEventListener("input", () => this.onInputSent());
+        }
+        onInputSent() {
+            let input = this.ref.instance.value;
+            if (input !== undefined) {
+                if (this.props.transformInput) {
+                    input = this.props.transformInput(input);
+                    this.ref.instance.value = input;
                 }
-            });
+                if (this.props.onInput) {
+                    this.props.onInput(input, this.ref);
+                }
+            }
+        }
+        setInputText(input) {
+            this.ref.instance.value = input;
+            this.onInputSent();
+            Coherent.trigger('UNFOCUS_INPUT_FIELD', this.uuid);
         }
         getInputBar() {
             return this.ref;
@@ -19612,15 +20383,20 @@
             this.ref = FSComponent.createRef();
         }
         onAfterRender(node) {
-            this.valueElement = this.ref.instance.querySelector(".SearchInput") || undefined;
-            if (this.valueElement !== undefined)
-                this.valueElement.addEventListener("DOMSubtreeModified", () => {
-                    var _a;
-                    let input = ((_a = this.valueElement) === null || _a === void 0 ? void 0 : _a.innerHTML) || "";
-                    if (this.props.onClick) {
-                        this.props.onClick(input);
-                    }
-                });
+            checkSimVarLoaded.then(() => {
+                this.valueElement = this.ref.instance.querySelector(".SearchInput") || undefined;
+                if (this.valueElement !== undefined) {
+                    this.valueElement.addEventListener("DOMSubtreeModified", () => {
+                        let input = this.ref.instance.value;
+                        if (this.props.onClick) {
+                            this.props.onClick(input);
+                        }
+                    });
+                }
+            });
+        }
+        setInput(input) {
+            this.ref.instance.setCurrentValue(input);
         }
         render() {
             return (FSComponent.buildComponent("new-list-button", { style: "width: 0px", ref: this.ref, class: this.props.class, id: this.props.class, choices: this.props.choices.join(",") }));
@@ -19635,11 +20411,27 @@
     const departTimeMaxLength = 4;
     const timeSplitMaxLength = 5;
     class FlightPlanPage extends DisplayComponent {
-        constructor(props) {
-            super(props);
+        constructor() {
+            super(...arguments);
+            this.subscriber = this.props.bus.getSubscriber();
+            this.publisher = this.props.bus.getPublisher();
+            this.flightPlanSetting = new FlightPlanSaveManager(this.props.bus);
             this.pageRef = FSComponent.createRef();
             this.fileButtonRef = FSComponent.createRef();
             this.fetchButtonRef = FSComponent.createRef();
+            this.flightRulesInputRef = FSComponent.createRef();
+            this.voiceInputRef = FSComponent.createRef();
+            this.departureInputRef = FSComponent.createRef();
+            this.arrivalInputRef = FSComponent.createRef();
+            this.alternateInputRef = FSComponent.createRef();
+            this.departureTimeInputRef = FSComponent.createRef();
+            this.equipmentInputRef = FSComponent.createRef();
+            this.enrouteTimeInputRef = FSComponent.createRef();
+            this.fuelAvailableInputRef = FSComponent.createRef();
+            this.cruiseSpeedInputRef = FSComponent.createRef();
+            this.cruiseAltitudeInputRef = FSComponent.createRef();
+            this.routeInputRef = FSComponent.createRef();
+            this.remarksInputRef = FSComponent.createRef();
             this.selectedFlightRules = "instrument";
             this.selectedVoice = "send + receive";
             this.departureICAO = "";
@@ -19661,17 +20453,33 @@
             if (this.pageRef.instance.classList.contains('hidden')) {
                 this.pageRef.instance.classList.remove('hidden');
             }
+            this.setInputs({
+                departure: this.flightPlanSetting.getSetting('departureAirport').get(),
+                arrival: this.flightPlanSetting.getSetting('arrivalAirport').get(),
+                alternate: this.flightPlanSetting.getSetting('alternateAirport').get(),
+                departureTime: this.flightPlanSetting.getSetting('departureTime').get(),
+                equipment: this.flightPlanSetting.getSetting('equipmentSuffix').get(),
+                hoursEnroute: this.flightPlanSetting.getSetting('hoursEnroute').get(),
+                minsEnroute: this.flightPlanSetting.getSetting('minsEnroute').get(),
+                hoursFuel: this.flightPlanSetting.getSetting('hoursFuel').get(),
+                minsFuel: this.flightPlanSetting.getSetting('minsFuel').get(),
+                cruiseSpeed: this.flightPlanSetting.getSetting('cruiseSpeed').get(),
+                cruiseAlt: this.flightPlanSetting.getSetting('cruiseAltitude').get(),
+                route: this.flightPlanSetting.getSetting('route').get(),
+                remarks: this.flightPlanSetting.getSetting('remarks').get(),
+                isVFR: this.flightPlanSetting.getSetting('isVFR').get(),
+            });
         }
         onAfterRender() {
             this.fileButtonRef.instance.addEventListener("click", () => {
-                this.props.publisher.pub("fileFlightPlan", {
+                this.publisher.pub("fileFlightPlan", {
                     departure: this.departureICAO,
                     arrival: this.arrivalICAO,
                     alternate: this.alternateICAO,
-                    cruiseAlt: this.cruiseSpeed,
-                    cruiseSpeed: this.cruiseAlt,
+                    cruiseAlt: this.cruiseAlt,
+                    cruiseSpeed: this.cruiseSpeed,
                     route: this.route,
-                    remarks: `${this.getVoiceRemark()} ${this.remarks}`,
+                    remarks: `${this.remarks} ${this.getVoiceRemark()}`,
                     departureTime: this.departureTime,
                     hoursEnroute: this.timeEnroute.hours,
                     minsEnroute: this.timeEnroute.minutes,
@@ -19682,17 +20490,19 @@
                 });
             });
             this.fetchButtonRef.instance.addEventListener("click", () => {
-                this.props.publisher.pub("fetchFlightPlan", true);
+                this.publisher.pub("fetchFlightPlan", true);
             });
+            this.subscriber.on('flightPlanReceived').handle((flightPlan) => this.setInputs(flightPlan));
         }
         getVoiceRemark() {
+            console.log(this.selectedVoice);
             switch (this.selectedVoice) {
                 case "send + receive":
-                    return "/v/";
+                    return "/V/";
                 case "receive only":
-                    return "/r/";
+                    return "/R/";
                 case "text only":
-                    return "/t/";
+                    return "/T/";
             }
         }
         transformText(maxLength, regex, input) {
@@ -19703,10 +20513,7 @@
             return newInput;
         }
         onFlightRuleInput(input) { this.selectedFlightRules = input; }
-        onVoiceInput(input) {
-            console.log(input);
-            this.selectedVoice = input;
-        }
+        onVoiceInput(input) { this.selectedVoice = input; }
         onDepartureInput(input) { this.departureICAO = input; }
         onArrivalInput(input) { this.arrivalICAO = input; }
         onAlternateInput(input) { this.alternateICAO = input; }
@@ -19756,80 +20563,253 @@
                 ref.instance.classList.remove("error");
             }
         }
+        setInputs(flightPlan) {
+            this.flightRulesInputRef.instance.setInput(flightPlan.isVFR ? 1 : 0);
+            this.voiceInputRef.instance.setInput(flightPlan.remarks.toLowerCase().includes("/t/") ? 2 : flightPlan.remarks.toLowerCase().includes("/r/") ? 1 : 0);
+            this.departureInputRef.instance.setInputText(flightPlan.departure);
+            this.arrivalInputRef.instance.setInputText(flightPlan.arrival);
+            this.alternateInputRef.instance.setInputText(flightPlan.alternate);
+            if (flightPlan.departureTime > 0) {
+                this.departureTimeInputRef.instance.setInputText(flightPlan.departureTime.toString());
+            }
+            this.equipmentInputRef.instance.setInputText(flightPlan.equipment);
+            if (flightPlan.minsEnroute > 0 || flightPlan.hoursEnroute > 0) {
+                this.enrouteTimeInputRef.instance.setInputText(`${flightPlan.hoursEnroute.toString().padStart(2, '0')}:${flightPlan.minsEnroute.toString().padStart(2, '0')}`);
+            }
+            if (flightPlan.minsFuel > 0 || flightPlan.hoursFuel > 0) {
+                this.fuelAvailableInputRef.instance.setInputText(`${flightPlan.hoursFuel.toString().padStart(2, '0')}:${flightPlan.minsFuel.toString().padStart(2, '0')}`);
+            }
+            if (flightPlan.cruiseSpeed > 0) {
+                this.cruiseSpeedInputRef.instance.setInputText(flightPlan.cruiseSpeed.toString());
+            }
+            if (flightPlan.cruiseAlt > 0) {
+                this.cruiseAltitudeInputRef.instance.setInputText(flightPlan.cruiseAlt.toString());
+            }
+            this.routeInputRef.instance.setInputText(flightPlan.route);
+            this.remarksInputRef.instance.setInputText(flightPlan.remarks);
+        }
         render() {
             return (FSComponent.buildComponent("div", { class: "hidden", ref: this.pageRef },
                 FSComponent.buildComponent("virtual-scroll", { direction: "y", "scroll-type": "auto" },
                     FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Flight Rules"),
-                    FSComponent.buildComponent(ScrollButton, { onClick: this.onFlightRuleInput.bind(this), class: "pt-1", choices: ["instrument", "visual"] }),
+                    FSComponent.buildComponent(ScrollButton, { ref: this.flightRulesInputRef, onClick: this.onFlightRuleInput.bind(this), class: "pt-1", choices: ["instrument", "visual"] }),
                     FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Voice"),
-                    FSComponent.buildComponent(ScrollButton, { onClick: this.onVoiceInput.bind(this), class: "pt-1", choices: ["send + receive", "receive only", "text only"] }),
+                    FSComponent.buildComponent(ScrollButton, { ref: this.voiceInputRef, onClick: this.onVoiceInput.bind(this), class: "pt-1", choices: ["send + receive", "receive only", "text only"] }),
                     FSComponent.buildComponent("div", { class: "grid grid-cols-3 pt-1" },
                         FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Departure"),
                         FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Arrival"),
                         FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Alternate")),
                     FSComponent.buildComponent("div", { class: "grid grid-cols-3" },
-                        FSComponent.buildComponent(InputBar, { requireInput: true, onInput: this.onDepartureInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" }),
-                        FSComponent.buildComponent(InputBar, { onInput: this.onArrivalInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" }),
-                        FSComponent.buildComponent(InputBar, { onInput: this.onAlternateInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" })),
+                        FSComponent.buildComponent(InputBar, { ref: this.departureInputRef, requireInput: true, onInput: this.onDepartureInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" }),
+                        FSComponent.buildComponent(InputBar, { ref: this.arrivalInputRef, onInput: this.onArrivalInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" }),
+                        FSComponent.buildComponent(InputBar, { ref: this.alternateInputRef, onInput: this.onAlternateInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" })),
                     FSComponent.buildComponent("div", { class: "grid grid-cols-2 pt-1" },
                         FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Departure Time"),
                         FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Equipment Suffix")),
                     FSComponent.buildComponent("div", { class: "grid grid-cols-2" },
                         FSComponent.buildComponent("div", { class: "flex" },
                             FSComponent.buildComponent("div", { class: "grid grid-cols-3" },
-                                FSComponent.buildComponent(InputBar, { requireInput: true, onInput: this.onDepartureTimeInput.bind(this), transformInput: this.transformDepartureTimeInput, class: "px-1 col-span-2" }),
+                                FSComponent.buildComponent(InputBar, { ref: this.departureTimeInputRef, requireInput: true, onInput: this.onDepartureTimeInput.bind(this), transformInput: this.transformDepartureTimeInput, class: "px-1 col-span-2" }),
                                 FSComponent.buildComponent("p", { class: "px-1 m-auto col-span-1" }, "hhmm zulu"))),
                         FSComponent.buildComponent("div", { class: "flex" },
-                            FSComponent.buildComponent(InputBar, { onInput: this.onEquipmentInput.bind(this), transformInput: this.transformText.bind(this, 1, alphabetRegex), class: "px-1" }))),
+                            FSComponent.buildComponent(InputBar, { ref: this.equipmentInputRef, onInput: this.onEquipmentInput.bind(this), transformInput: this.transformText.bind(this, 1, alphabetRegex), class: "px-1" }))),
                     FSComponent.buildComponent("div", { class: "grid grid-cols-2 pt-1" },
                         FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Time Enroute"),
                         FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Fuel Available")),
                     FSComponent.buildComponent("div", { class: "grid grid-cols-2" },
                         FSComponent.buildComponent("div", { class: "flex" },
-                            FSComponent.buildComponent(InputBar, { onInput: this.onTimeEnrouteInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, timeSplitRegex), class: "px-1" }),
+                            FSComponent.buildComponent(InputBar, { ref: this.enrouteTimeInputRef, onInput: this.onTimeEnrouteInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, timeSplitRegex), class: "px-1" }),
                             FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "hh:mm")),
                         FSComponent.buildComponent("div", { class: "flex" },
-                            FSComponent.buildComponent(InputBar, { onInput: this.onFuelAvailableInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, timeSplitRegex), class: "px-1" }),
+                            FSComponent.buildComponent(InputBar, { ref: this.fuelAvailableInputRef, onInput: this.onFuelAvailableInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, timeSplitRegex), class: "px-1" }),
                             FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "hh:mm"))),
                     FSComponent.buildComponent("div", { class: "grid grid-cols-2 pt-1" },
                         FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Cruise Speed"),
                         FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Cruise Alt")),
                     FSComponent.buildComponent("div", { class: "grid grid-cols-2" },
                         FSComponent.buildComponent("div", { class: "flex" },
-                            FSComponent.buildComponent(InputBar, { requireInput: true, onInput: this.onCruiseSpeedInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, numericRegex), class: "px-1" }),
+                            FSComponent.buildComponent(InputBar, { ref: this.cruiseSpeedInputRef, requireInput: true, onInput: this.onCruiseSpeedInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, numericRegex), class: "px-1" }),
                             FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "TAS")),
                         FSComponent.buildComponent("div", { class: "flex" },
-                            FSComponent.buildComponent(InputBar, { requireInput: true, onInput: this.onCruiseSpeedInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, numericRegex), class: "px-1" }),
+                            FSComponent.buildComponent(InputBar, { ref: this.cruiseAltitudeInputRef, requireInput: true, onInput: this.onCruiseAltitudeInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, numericRegex), class: "px-1" }),
                             FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "ft"))),
                     FSComponent.buildComponent("p", { class: "font-semibold pt-1 px-1" }, "Route"),
-                    FSComponent.buildComponent(InputBox, { onInput: this.onRouteInput.bind(this), transformInput: (input) => { return input.toUpperCase(); }, class: "mx-1" }),
+                    FSComponent.buildComponent(InputBox, { ref: this.routeInputRef, onInput: this.onRouteInput.bind(this), transformInput: (input) => { return input.toUpperCase(); }, class: "mx-1" }),
                     FSComponent.buildComponent("p", { class: "font-semibold pt-1 px-1" }, "Remarks"),
-                    FSComponent.buildComponent(InputBox, { onInput: this.onRemarksInput.bind(this), transformInput: (input) => { return input.toUpperCase(); }, class: "mx-1" })),
+                    FSComponent.buildComponent(InputBox, { ref: this.remarksInputRef, onInput: this.onRemarksInput.bind(this), transformInput: (input) => { return input.toUpperCase(); }, class: "mx-1" })),
                 FSComponent.buildComponent("new-push-button", { ref: this.fileButtonRef, class: "w-auto mt-2 mx-2 text-center", title: "File" }),
                 FSComponent.buildComponent("new-push-button", { ref: this.fetchButtonRef, class: "w-auto mt-2 mx-2 text-center", title: "Fetch from server" })));
         }
     }
 
+    var ATCTower;
+    (function (ATCTower) {
+        ATCTower[ATCTower["Centre"] = 0] = "Centre";
+        ATCTower[ATCTower["ApproachDeparture"] = 1] = "ApproachDeparture";
+        ATCTower[ATCTower["Tower"] = 2] = "Tower";
+        ATCTower[ATCTower["Ground"] = 3] = "Ground";
+        ATCTower[ATCTower["Delivery"] = 4] = "Delivery";
+        ATCTower[ATCTower["ATIS"] = 5] = "ATIS";
+        ATCTower[ATCTower["Other"] = 6] = "Other";
+    })(ATCTower || (ATCTower = {}));
+    class OnlineATC extends DisplayComponent {
+        constructor() {
+            super(...arguments);
+            this.subscriber = this.props.bus.getSubscriber();
+            this.gnssEvents = this.props.bus.getSubscriber();
+            this.mainRef = FSComponent.createRef();
+            this.centreRef = FSComponent.createRef();
+            this.towerRef = FSComponent.createRef();
+            this.approachDepartureRef = FSComponent.createRef();
+            this.groundRef = FSComponent.createRef();
+            this.deliveryRef = FSComponent.createRef();
+            this.atisRef = FSComponent.createRef();
+            this.otherRef = FSComponent.createRef();
+            this.positionSubject = ConsumerSubject.create(this.gnssEvents.on('gps-position').atFrequency(0.5), new LatLongAlt());
+            this.controllers = new Map([]);
+            this.controllerRefs = new Map([]);
+        }
+        getParentRefFromType(type) {
+            let refPair = {
+                [ATCTower.Centre]: this.centreRef,
+                [ATCTower.Tower]: this.towerRef,
+                [ATCTower.ApproachDeparture]: this.approachDepartureRef,
+                [ATCTower.Ground]: this.groundRef,
+                [ATCTower.Delivery]: this.deliveryRef,
+                [ATCTower.ATIS]: this.atisRef,
+                [ATCTower.Other]: this.otherRef,
+            };
+            return refPair[type];
+        }
+        getTowerTypeFromName(name) {
+            if (name.includes("CTR") || name.includes("FSS")) {
+                return ATCTower.Centre;
+            }
+            else if (name.includes("APP") || name.includes("DEP")) {
+                return ATCTower.ApproachDeparture;
+            }
+            else if (name.includes("GND")) {
+                return ATCTower.Ground;
+            }
+            else if (name.includes("TWR")) {
+                return ATCTower.Tower;
+            }
+            else if (name.includes("DEL")) {
+                return ATCTower.Delivery;
+            }
+            else if (name.includes("ATIS")) {
+                return ATCTower.ATIS;
+            }
+            else {
+                return ATCTower.Other;
+            }
+        }
+        hide() {
+            this.mainRef.instance.classList.add('hidden');
+        }
+        show() {
+            if (this.mainRef.instance.classList.contains('hidden')) {
+                this.mainRef.instance.classList.remove('hidden');
+            }
+        }
+        reorderControllers() {
+            let positionLatLonAlt = this.positionSubject.get();
+            let position = new GeoPoint(positionLatLonAlt.lat, positionLatLonAlt.long);
+            Array.from(this.controllers.values()).sort((controllerA, controllerB) => {
+                let distanceA = position.distance(controllerA.Latitude, controllerA.Longitude);
+                let distanceB = position.distance(controllerB.Latitude, controllerB.Longitude);
+                return distanceA - distanceB;
+            }).sort((controllerA, controllerB) => this.getTowerTypeFromName(controllerA.Callsign) - this.getTowerTypeFromName(controllerB.Callsign))
+                .forEach((controller, index) => {
+                let ref = this.controllerRefs.get(controller.Callsign);
+                if (ref) {
+                    ref.instance.style.order = index.toString();
+                }
+            });
+        }
+        onAfterRender(node) {
+            this.subscriber.on('controllerChange').handle((controller) => {
+                var _a;
+                this.controllers.set(controller.Callsign, controller);
+                (_a = this.controllerRefs.get(controller.Callsign)) === null || _a === void 0 ? void 0 : _a.instance.remove();
+                let controllerRef = FSComponent.createRef();
+                FSComponent.render(FSComponent.buildComponent("div", { ref: controllerRef, class: "pb-2 pt-2 border-gray-500 border-b-2 grid grid-cols-2" },
+                    FSComponent.buildComponent("p", { class: "pl-2" },
+                        FSComponent.buildComponent("strong", null, controller.Callsign)),
+                    FSComponent.buildComponent("p", { class: "text-right pr-1" },
+                        FSComponent.buildComponent("code", null,
+                            "1",
+                            (controller.Frequency / 1000).toFixed(3)))), this.getParentRefFromType(this.getTowerTypeFromName(controller.Callsign)).instance);
+                this.controllerRefs.set(controller.Callsign, controllerRef);
+                this.reorderControllers();
+            });
+            this.subscriber.on('controllerDelete').handle((callsign) => {
+                var _a;
+                this.controllers.delete(callsign);
+                (_a = this.controllerRefs.get(callsign)) === null || _a === void 0 ? void 0 : _a.instance.remove();
+                this.controllerRefs.delete(callsign);
+            });
+            this.positionSubject.sub(() => this.reorderControllers());
+        }
+        render() {
+            return (FSComponent.buildComponent("div", { class: "hidden online-atc", ref: this.mainRef },
+                FSComponent.buildComponent("div", { class: "w-100 pl-1 pr-1 space-y-2" },
+                    FSComponent.buildComponent("options-list-content", { class: "Content", title: "CENTRE", "is-open": true },
+                        FSComponent.buildComponent("div", { class: "optionsListContentItems", ref: this.centreRef })),
+                    FSComponent.buildComponent("options-list-content", { class: "Content", title: "TOWER", "is-open": true },
+                        FSComponent.buildComponent("div", { class: "optionsListContentItems", ref: this.towerRef })),
+                    FSComponent.buildComponent("options-list-content", { class: "Content", title: "APPROACH AND DEPARTURE", "is-open": true },
+                        FSComponent.buildComponent("div", { class: "optionsListContentItems", ref: this.approachDepartureRef })),
+                    FSComponent.buildComponent("options-list-content", { class: "Content", title: "GROUND", "is-open": true },
+                        FSComponent.buildComponent("div", { class: "optionsListContentItems", ref: this.groundRef })),
+                    FSComponent.buildComponent("options-list-content", { class: "Content", title: "DELIVERY", "is-open": true },
+                        FSComponent.buildComponent("div", { class: "optionsListContentItems", ref: this.deliveryRef })),
+                    FSComponent.buildComponent("options-list-content", { class: "Content", title: "ATIS", "is-open": true },
+                        FSComponent.buildComponent("div", { class: "optionsListContentItems", ref: this.atisRef })),
+                    FSComponent.buildComponent("options-list-content", { class: "Content", title: "OTHER", "is-open": true },
+                        FSComponent.buildComponent("div", { class: "optionsListContentItems", ref: this.otherRef })))));
+        }
+    }
+
     const websocketUri = "ws://127.0.0.1:8080/";
     class Backend {
-        constructor(eventBus) {
+        constructor(bus) {
+            this.bus = bus;
+            this.aircraftSetting = new AircraftSaveManager(this.bus);
+            this.flightPlanSetting = new FlightPlanSaveManager(this.bus);
+            this.controllers = new Map([]);
             this.websocket;
-            this.publisher = eventBus.getPublisher();
-            this.subscriber = eventBus.getSubscriber();
+            this.publisher = this.bus.getPublisher();
+            this.subscriber = this.bus.getSubscriber();
             this.handleFrontEndEvents();
             this.createWebsocket();
         }
         handleFrontEndEvents() {
             this.subscriber.on("connectToNetwork").handle((values) => {
-                this.websocket.send(`ConnectToNetwork/Callsign:${values.callsign}/TypeCode:${values.aircraft}/SelCal:${values.selcal}`);
+                this.websocket.send(`ConnectToNetwork<|>Callsign:${values.callsign}<|>TypeCode:${values.aircraft}<|>SelCal:${values.selcal}`);
+                this.aircraftSetting.getSetting('callsign').set(values.callsign);
+                this.aircraftSetting.getSetting('selcal').set(values.selcal);
             });
             this.subscriber.on("disconnectFromNetwork").handle(() => {
                 this.websocket.send("DisconnectFromNetwork");
             });
             this.subscriber.on("fileFlightPlan").handle((values) => {
-                // console.log(`SendFlight/Departure:${values.departure}/Arrival:${values.arrival}/Alternate:${values.alternate}/CruiseAlt:${values.cruiseAlt}/CruiseSpeed:${values.cruiseSpeed}/Route:${values.route}/Remarks:${values.remarks}/DepartureTime:${values.departureTime}/HoursEnroute:${values.hoursEnroute}/MinsEnroute:${values.minsEnroute}/HoursFuel:${values.hoursFuel}/MinsFuel:${values.minsFuel}/IsVFR:${values.isVFR}`)
-                this.websocket.send(`SendFlightPlan/Departure:${values.departure}/Arrival:${values.arrival}/Alternate:${values.alternate}/CruiseAlt:${values.cruiseAlt}/CruiseSpeed:${values.cruiseSpeed}/Route:${values.route}/Remarks:${values.remarks}/DepartureTime:${values.departureTime}`);
-                this.websocket.send(`SendFlightPlan/HoursEnroute:${values.hoursEnroute}/MinsEnroute:${values.minsEnroute}/HoursFuel:${values.hoursFuel}/MinsFuel:${values.minsFuel}/EquipmentCode:${values.equipment}/IsVFR:${values.isVFR}/FilePlan:true`);
+                this.websocket.send(`SendFlightPlan<|>Departure:${values.departure}<|>Arrival:${values.arrival}<|>Alternate:${values.alternate}<|>CruiseAlt:${values.cruiseAlt / 10}<|>CruiseSpeed:${values.cruiseSpeed / 10}<|>Route:${values.route}<|>Remarks:${values.remarks}<|>DepartureTime:${values.departureTime}`);
+                this.websocket.send(`SendFlightPlan<|>HoursEnroute:${values.hoursEnroute}<|>MinsEnroute:${values.minsEnroute}<|>HoursFuel:${values.hoursFuel}<|>MinsFuel:${values.minsFuel}<|>EquipmentCode:${values.equipment}<|>IsVFR:${values.isVFR}<|>FilePlan:true`);
+                this.flightPlanSetting.getSetting('departureAirport').set(values.departure);
+                this.flightPlanSetting.getSetting('arrivalAirport').set(values.arrival);
+                this.flightPlanSetting.getSetting('alternateAirport').set(values.alternate);
+                this.flightPlanSetting.getSetting('departureTime').set(values.departureTime);
+                this.flightPlanSetting.getSetting('equipmentSuffix').set(values.equipment);
+                this.flightPlanSetting.getSetting('hoursEnroute').set(values.hoursEnroute);
+                this.flightPlanSetting.getSetting('minsEnroute').set(values.minsEnroute);
+                this.flightPlanSetting.getSetting('hoursFuel').set(values.hoursFuel);
+                this.flightPlanSetting.getSetting('minsFuel').set(values.minsFuel);
+                this.flightPlanSetting.getSetting('cruiseSpeed').set(values.cruiseSpeed);
+                this.flightPlanSetting.getSetting('cruiseAltitude').set(values.cruiseAlt);
+                this.flightPlanSetting.getSetting('route').set(values.route);
+                this.flightPlanSetting.getSetting('remarks').set(values.remarks);
+                this.flightPlanSetting.getSetting('isVFR').set(values.isVFR);
             });
             this.subscriber.on("fetchFlightPlan").handle(() => {
                 this.websocket.send("FetchFlightPlan");
@@ -19840,7 +20820,7 @@
             this.publisher.pub("establishedConnection", true);
         }
         handleMessage(e) {
-            let splitMessage = e.data.split("/");
+            let splitMessage = e.data.split("<|>");
             let type;
             let args = {};
             splitMessage.forEach((stringPair) => {
@@ -19852,19 +20832,63 @@
                     args[strings[0]] = strings[1];
                 }
             });
-            console.log(`Type: ${type}, Args: ${args}`);
+            console.log(`Type: ${type}, Args: ${JSON.stringify(args)}`);
             switch (type) {
                 case "NetworkConnectionEstablished":
-                    console.log(args);
-                    this.publisher.pub("callsign", args["CallSign"]);
+                    this.publisher.pub("networkCallsign", args["CallSign"]);
                     break;
                 case "DisconnectedFromNetwork":
-                    this.publisher.pub("callsign", undefined);
+                    this.publisher.pub("networkCallsign", undefined);
+                    break;
+                case "FlightPlanReceived":
+                    if (args["Callsign"] == this.aircraftSetting.getSetting('callsign').get()) {
+                        this.publisher.pub("flightPlanReceived", {
+                            departure: args["Departure"],
+                            arrival: args["Destination"],
+                            alternate: args["Alternate"],
+                            cruiseAlt: Number(args["CruiseAlt"]),
+                            cruiseSpeed: Number(args["CruiseSpeed"]),
+                            route: args["Route"],
+                            remarks: args["Remarks"],
+                            equipment: args["EquipmentCode"],
+                            departureTime: Number(args["DepartureTime"]),
+                            hoursEnroute: Number(args["HoursEnroute"]),
+                            minsEnroute: Number(args["MinsEnroute"]),
+                            hoursFuel: Number(args["HoursFuel"]),
+                            minsFuel: Number(args["MinsFuel"]),
+                            isVFR: Boolean(args["IsVFR"])
+                        });
+                    }
+                    break;
+                case "ControllerAdded":
+                    let controllerAdd = {
+                        Callsign: args["Callsign"],
+                        Frequency: Number(args["Frequency"]),
+                        Latitude: Number(args["Latitude"]),
+                        Longitude: Number(args["Longitude"]),
+                    };
+                    this.controllers.set(controllerAdd.Callsign, controllerAdd);
+                    this.publisher.pub("controllerChange", controllerAdd);
+                    break;
+                case "ControllerDeleted":
+                    this.controllers.delete(args["Callsign"]);
+                    this.publisher.pub("controllerDelete", args["Callsign"]);
+                    break;
+                case "ControllerChangeFreq":
+                case "ControllerChangeLocation":
+                    let controllerChange = this.controllers.get(args["Callsign"]);
+                    if (controllerChange) {
+                        controllerChange.Frequency = args["Frequency"] ? Number(args["Frequency"]) : controllerChange.Frequency;
+                        controllerChange.Latitude = args["Latitude"] ? Number(args["Latitude"]) : controllerChange.Latitude;
+                        controllerChange.Longitude = args["Longitude"] ? Number(args["Longitude"]) : controllerChange.Longitude;
+                        this.controllers.set(controllerChange.Callsign, controllerChange);
+                        this.publisher.pub("controllerChange", controllerChange);
+                    }
                     break;
             }
         }
         handleError(e) {
-            console.log(`!! WebSocket Error: ${e.data} !!`);
+            console.log(`!! WebSocket Error: ${e} !!`);
         }
         handleConnectionClose(e) {
             if (this.websocket) {
@@ -19902,31 +20926,44 @@
         }
     }
 
-    const eventBus = new EventBus();
-    const subscriber = eventBus.getSubscriber();
-    const publisher = eventBus.getPublisher();
-    new Backend(eventBus);
     class VPEPanel extends DisplayComponent {
         constructor(props) {
             super(props);
+            this.bus = new EventBus();
+            this.gnss = new GNSSPublisher(this.bus);
+            this.clock = new ClockPublisher(this.bus);
+            this.subscriber = this.bus.getSubscriber();
+            this.publisher = this.bus.getPublisher();
+            this.settingSaveManager = new vPESettingSaveManager(this.bus);
+            this.backend = new Backend(this.bus);
+            this.callsign = Subject.create(undefined);
+            this.timeToRetry = Subject.create(0);
             this.awaitConnectionRef = FSComponent.createRef();
+            this.onlineATCRef = FSComponent.createRef();
             this.headerRef = FSComponent.createRef();
             this.flightPlanRef = FSComponent.createRef();
             this.vatsimConnectRef = FSComponent.createRef();
+            this.disconnectRef = FSComponent.createRef();
             this.connection = false;
-            this.timeToRetry = Subject.create(0);
-            this.callsign = Subject.create(undefined);
-            subscriber.on("establishedConnection").handle(value => this.websocketConnectionStateChanged(value));
-            subscriber.on("timeToRetry").handle(value => { this.timeToRetry.set(value); });
-            subscriber.on("callsign").handle(value => this.vatsimConnectionStateChanged(value));
-        }
-        onAfterRender(node) {
-            this.disconnectRef.instance.addEventListener("click", () => {
-                publisher.pub("disconnectFromNetwork", true);
+            checkSimVarLoaded.then(() => {
+                const key = `${SimVar.GetSimVarValue('ATC MODEL', 'string')}.profile_1`;
+                this.settingSaveManager.load(key);
+                this.settingSaveManager.startAutoSave(key);
             });
         }
+        onAfterRender(node) {
+            this.subscriber.on("establishedConnection").handle(value => this.websocketConnectionStateChanged(value));
+            this.subscriber.on("timeToRetry").handle(value => { this.timeToRetry.set(value); });
+            this.subscriber.on("networkCallsign").handle(value => this.vatsimConnectionStateChanged(value));
+            this.disconnectRef.instance.addEventListener("click", () => {
+                this.publisher.pub("disconnectFromNetwork", true);
+            });
+            this.gnss.startPublish();
+            this.clock.startPublish();
+            this.update();
+        }
         vatsimConnectionStateChanged(callsign) {
-            let connected = callsign !== undefined;
+            let connected = callsign !== undefined && callsign !== '';
             if (connected == true) {
                 this.showPage("flightPlan");
                 if (this.headerRef.instance.classList.contains("hidden")) {
@@ -19945,11 +20982,10 @@
             const pagesToRefs = {
                 ["vatsimConnect"]: this.vatsimConnectRef,
                 ["awaitConnection"]: this.awaitConnectionRef,
-                ["flightPlan"]: this.flightPlanRef
+                ["flightPlan"]: this.flightPlanRef,
+                ["onlineATC"]: this.onlineATCRef,
             };
-            Object.entries(pagesToRefs).forEach((kvpair) => {
-                let refName = kvpair[0];
-                let ref = kvpair[1];
+            Object.entries(pagesToRefs).forEach(([refName, ref]) => {
                 if (page !== undefined && refName == page) {
                     ref.instance.show();
                 }
@@ -19967,22 +21003,41 @@
                 this.showPage("awaitConnection");
             }
         }
+        update() {
+            if (window['IsDestroying'] === true) {
+                return;
+            }
+            this.gnss.onUpdate();
+            this.clock.onUpdate();
+            requestAnimationFrame(() => this.update());
+        }
         render() {
             return (FSComponent.buildComponent("ingamepanel-custom", null,
                 FSComponent.buildComponent("ingame-ui", { id: "vPE_Frame", "panel-id": "PANEL_VPILOT_EXTENDER", class: "ingameUiFrame panelInvisible", title: "vPE", "min-width": "40", "min-height": "40" },
                     FSComponent.buildComponent("div", { id: "header", ref: this.headerRef, class: "mx-1 pb-2 hidden" },
-                        FSComponent.buildComponent("tab-menu", { selectedIndex: "0" },
-                            FSComponent.buildComponent("tabmenu-item", { "tab-id": "Tab1", id: "TabSwitch1", title: "Flight Plan" }),
-                            FSComponent.buildComponent("tabmenu-item", { "tab-id": "Tab2", id: "TabSwitch2", title: "Online ATC" })),
+                        FSComponent.buildComponent(ButtonGroup, { buttons: ["Flight Plan", "Online ATC"], onInput: (input) => {
+                                if (this.callsign.get() !== undefined) {
+                                    switch (input) {
+                                        case "Flight Plan":
+                                            this.showPage("flightPlan");
+                                            break;
+                                        case "Online ATC":
+                                            this.showPage("onlineATC");
+                                            break;
+                                    }
+                                }
+                            } }),
                         FSComponent.buildComponent("div", { class: "grid grid-cols-3" },
                             FSComponent.buildComponent("div", { class: "flex justify-center items-center" },
                                 FSComponent.buildComponent("span", { class: "font-bold text-base" }, this.callsign)),
                             FSComponent.buildComponent("div", { class: "col-span-2" },
                                 FSComponent.buildComponent("new-push-button", { ref: this.disconnectRef, style: "width: 100%", class: "mt-1", title: "Disconnect" })))),
-                    FSComponent.buildComponent("div", { id: "main" },
-                        FSComponent.buildComponent(AwaitingConnection, { ref: this.awaitConnectionRef, timeToRetry: this.timeToRetry }),
-                        FSComponent.buildComponent(FlightPlanPage, { ref: this.flightPlanRef, publisher: publisher }),
-                        FSComponent.buildComponent(ConnectPage, { ref: this.vatsimConnectRef, publisher: publisher })),
+                    FSComponent.buildComponent("virtual-scroll", { class: "optionsScroll condensed list-with-buttons hasScrollableContent hasScrollbar", direction: "y" },
+                        FSComponent.buildComponent("div", { class: "h-full", id: "main" },
+                            FSComponent.buildComponent(AwaitingConnection, { ref: this.awaitConnectionRef, timeToRetry: this.timeToRetry }),
+                            FSComponent.buildComponent(FlightPlanPage, { ref: this.flightPlanRef, bus: this.bus }),
+                            FSComponent.buildComponent(ConnectPage, { ref: this.vatsimConnectRef, bus: this.bus }),
+                            FSComponent.buildComponent(OnlineATC, { ref: this.onlineATCRef, bus: this.bus }))),
                     FSComponent.buildComponent("div", { class: "condensedPanel", id: "footer" }))));
         }
     }

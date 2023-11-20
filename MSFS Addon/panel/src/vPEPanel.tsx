@@ -1,58 +1,65 @@
 import {
-    ComponentProps, DisplayComponent, EventBus, FSComponent, NodeReference, Subject, VNode
+    ClockPublisher, ComponentProps, DisplayComponent, EventBus, FSComponent, GNSSPublisher,
+    NodeReference, Subject, VNode
 } from '@microsoft/msfs-sdk';
 
-import { AwaitingConnection } from './components/awaitingConnection';
-import { ConnectPage } from './components/connectPage';
-import { FlightPlanPage } from './components/flightPlan';
+import { ButtonGroup } from './components/buttonGroup';
+import { AwaitingConnection } from './pages/awaitingConnection';
+import { ConnectPage } from './pages/connectPage';
+import { FlightPlanPage } from './pages/flightPlan';
+import { OnlineATC } from './pages/onlineATC';
+import { vPESettingSaveManager } from './SettingSaveManager';
+import { checkSimVarLoaded } from './Utilites';
 import { Backend, BackendEvents, FrontendEvents } from './vPEBackend';
 
-const eventBus = new EventBus();
-const subscriber = eventBus.getSubscriber<BackendEvents>();
-const publisher = eventBus.getPublisher<FrontendEvents>();
-const backend = new Backend(eventBus);
+type possiblePages = "awaitConnection" | "vatsimConnect" | "flightPlan" | "onlineATC"
 
-type possiblePages = "awaitConnection" | "vatsimConnect" | "flightPlan"
+class VPEPanel extends DisplayComponent<ComponentProps> {
+    private readonly bus = new EventBus();
+    private readonly gnss = new GNSSPublisher(this.bus);
+    private readonly clock = new ClockPublisher(this.bus);
+    private readonly subscriber = this.bus.getSubscriber<BackendEvents>();
+    private readonly publisher = this.bus.getPublisher<FrontendEvents>();
+    private readonly settingSaveManager = new vPESettingSaveManager(this.bus)
+    private readonly backend = new Backend(this.bus);
 
-interface vPEPanelProps extends ComponentProps { }
-interface VPEPanel {
-    awaitConnectionRef: NodeReference<AwaitingConnection>
-    flightPlanRef: NodeReference<FlightPlanPage>
-    headerRef: NodeReference<HTMLDivElement>
-    vatsimConnectRef: NodeReference<ConnectPage>
-    disconnectRef: NodeReference<any>
+    private readonly callsign = Subject.create<string | undefined>(undefined);
+    private readonly timeToRetry = Subject.create<number>(0);
+    private readonly awaitConnectionRef = FSComponent.createRef<AwaitingConnection>();
+    private readonly onlineATCRef = FSComponent.createRef<OnlineATC>();
+    private readonly headerRef = FSComponent.createRef<HTMLDivElement>();
+    private readonly flightPlanRef = FSComponent.createRef<FlightPlanPage>();
+    private readonly vatsimConnectRef = FSComponent.createRef<ConnectPage>();
+    private readonly disconnectRef = FSComponent.createRef<HTMLElement>();
 
-    connection: boolean;
-    timeToRetry: Subject<number>;
-    callsign: Subject<string | undefined>;
-}
+    private connection = false;
 
-class VPEPanel extends DisplayComponent<vPEPanelProps> {
-    constructor(props: vPEPanelProps) {
+    constructor(props: ComponentProps) {
         super(props);
 
-        this.awaitConnectionRef = FSComponent.createRef<AwaitingConnection>();
-        this.headerRef = FSComponent.createRef<HTMLDivElement>();
-        this.flightPlanRef = FSComponent.createRef<FlightPlanPage>();
-        this.vatsimConnectRef = FSComponent.createRef<ConnectPage>();
-
-        this.connection = false;
-        this.timeToRetry = Subject.create<number>(0);
-        this.callsign = Subject.create<string | undefined>(undefined);
-
-        subscriber.on("establishedConnection").handle(value => this.websocketConnectionStateChanged(value));
-        subscriber.on("timeToRetry").handle(value => { this.timeToRetry.set(value) });
-        subscriber.on("callsign").handle(value => this.vatsimConnectionStateChanged(value))
-    }
-
-    onAfterRender(node: VNode): void {
-        this.disconnectRef.instance.addEventListener("click", () => {
-            publisher.pub("disconnectFromNetwork", true)
+        checkSimVarLoaded.then(() => {
+            const key = `${SimVar.GetSimVarValue('ATC MODEL', 'string')}.profile_1`
+            this.settingSaveManager.load(key)
+            this.settingSaveManager.startAutoSave(key)
         })
     }
 
+    onAfterRender(node: VNode): void {
+        this.subscriber.on("establishedConnection").handle(value => this.websocketConnectionStateChanged(value));
+        this.subscriber.on("timeToRetry").handle(value => { this.timeToRetry.set(value) });
+        this.subscriber.on("networkCallsign").handle(value => this.vatsimConnectionStateChanged(value))
+        this.disconnectRef.instance.addEventListener("click", () => {
+            this.publisher.pub("disconnectFromNetwork", true)
+        })
+
+        this.gnss.startPublish();
+        this.clock.startPublish();
+
+        this.update()
+    }
+
     vatsimConnectionStateChanged(callsign?: string) {
-        let connected = callsign !== undefined
+        let connected = callsign !== undefined && callsign !== ''
 
         if (connected == true) {
             this.showPage("flightPlan")
@@ -73,13 +80,11 @@ class VPEPanel extends DisplayComponent<vPEPanelProps> {
         const pagesToRefs: { [key: string]: any } = {
             ["vatsimConnect"]: this.vatsimConnectRef,
             ["awaitConnection"]: this.awaitConnectionRef,
-            ["flightPlan"]: this.flightPlanRef
+            ["flightPlan"]: this.flightPlanRef,
+            ["onlineATC"]: this.onlineATCRef,
         }
 
-        Object.entries(pagesToRefs).forEach((kvpair: any) => {
-            let refName = kvpair[0];
-            let ref = kvpair[1];
-
+        Object.entries(pagesToRefs).forEach(([refName, ref]) => {
             if (page !== undefined && refName == page) {
                 ref.instance.show()
             } else {
@@ -98,6 +103,17 @@ class VPEPanel extends DisplayComponent<vPEPanelProps> {
         }
     }
 
+    private update() {
+        if ((window as any)['IsDestroying'] === true) {
+            return;
+        }
+
+        this.gnss.onUpdate();
+        this.clock.onUpdate();
+
+        requestAnimationFrame(() => this.update())
+    }
+
     render(): VNode | null {
         return (
             <ingamepanel-custom>
@@ -110,10 +126,18 @@ class VPEPanel extends DisplayComponent<vPEPanelProps> {
                     min-height="40"
                 >
                     <div id="header" ref={this.headerRef} class="mx-1 pb-2 hidden">
-                        <tab-menu selectedIndex="0">
-                            <tabmenu-item tab-id="Tab1" id="TabSwitch1" title="Flight Plan" />
-                            <tabmenu-item tab-id="Tab2" id="TabSwitch2" title="Online ATC" />
-                        </tab-menu>
+                        <ButtonGroup buttons={["Flight Plan", "Online ATC"]} onInput={(input) => {
+                            if (this.callsign.get() !== undefined) {
+                                switch (input) {
+                                    case "Flight Plan":
+                                        this.showPage("flightPlan")
+                                        break;
+                                    case "Online ATC":
+                                        this.showPage("onlineATC")
+                                        break;
+                                }
+                            }
+                        }} />
 
                         <div class="grid grid-cols-3">
                             <div class="flex justify-center items-center">
@@ -125,11 +149,14 @@ class VPEPanel extends DisplayComponent<vPEPanelProps> {
                         </div>
                     </div>
 
-                    <div id="main">
-                        <AwaitingConnection ref={this.awaitConnectionRef} timeToRetry={this.timeToRetry} />
-                        <FlightPlanPage ref={this.flightPlanRef} publisher={publisher} />
-                        <ConnectPage ref={this.vatsimConnectRef} publisher={publisher} />
-                    </div>
+                    <virtual-scroll class="optionsScroll condensed list-with-buttons hasScrollableContent hasScrollbar" direction="y">
+                        <div class="h-full" id="main">
+                            <AwaitingConnection ref={this.awaitConnectionRef} timeToRetry={this.timeToRetry} />
+                            <FlightPlanPage ref={this.flightPlanRef} bus={this.bus} />
+                            <ConnectPage ref={this.vatsimConnectRef} bus={this.bus} />
+                            <OnlineATC ref={this.onlineATCRef} bus={this.bus} />
+                        </div>
+                    </virtual-scroll>
 
                     <div class="condensedPanel" id="footer"></div>
                 </ingame-ui>

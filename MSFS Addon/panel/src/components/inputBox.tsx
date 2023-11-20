@@ -31,22 +31,28 @@ export class InputBox extends DisplayComponent<InputBoxProps> {
             Coherent.trigger('UNFOCUS_INPUT_FIELD', this.uuid)
         })
 
-        this.ref.instance.addEventListener("input", () => {
-            let input = this.ref.instance.value;
-
-            if (input !== undefined) {
-                if (this.props.transformInput) {
-                    input = this.props.transformInput(input)
-                    this.ref.instance.value = input
-                }
-                if (this.props.onInput) {
-                    this.props.onInput(input, this.ref)
-                }
-            }
-        })
+        this.ref.instance.addEventListener("input", () => this.onInputSent())
     }
 
+    private onInputSent() {
+        let input = this.ref.instance.value;
 
+        if (input !== undefined) {
+            if (this.props.transformInput) {
+                input = this.props.transformInput(input)
+                this.ref.instance.value = input
+            }
+            if (this.props.onInput) {
+                this.props.onInput(input, this.ref)
+            }
+        }
+    }
+
+    public setInputText(input: string) {
+        this.ref.instance.value = input
+        this.onInputSent()
+        Coherent.trigger('UNFOCUS_INPUT_FIELD', this.uuid)
+    }
 
     public getInputBar() {
         return this.ref

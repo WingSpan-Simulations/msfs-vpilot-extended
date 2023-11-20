@@ -17,3 +17,21 @@ D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Exten
 D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\obj\Release\vPilot Extended.dll
 D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\obj\Release\vPilot Extended.pdb
 D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\vPilot Extended.dll.config
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\Microsoft.Bcl.AsyncInterfaces.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.Buffers.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.Memory.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.Numerics.Vectors.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.Runtime.CompilerServices.Unsafe.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.Text.Encodings.Web.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.Text.Json.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.Threading.Tasks.Extensions.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.ValueTuple.dll
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\Microsoft.Bcl.AsyncInterfaces.xml
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.Buffers.xml
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.Memory.xml
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.Numerics.Vectors.xml
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.Runtime.CompilerServices.Unsafe.xml
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.Text.Encodings.Web.xml
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.Text.Json.xml
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.Threading.Tasks.Extensions.xml
+D:\Microsoft Flight Sim Projects\msfs-vpilot-extended\vPilot Plugin\vPilot Extended\bin\Release\System.ValueTuple.xml

@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="Windows-1252"?>
-<SimBase.Document Type="InGamePanels" version="1,0">
-  <Filename>meqolo-vpilot-extender.spb</Filename>
-  <InGamePanels.InGamePanelDefinition id="PANEL_VPILOT_EXTENDER" Name="vPilot Extender" url="html_UI/InGamePanels/vPEPanel/vPEPanel.html" resizeDirections="Both" minWidth="40" minHeight="40" defaultWidth="40" defaultHeight="40" defaultTop="28.000" defaultRight="2.000" icon="ICON_TOOLBAR_MEQOLO_VPILOT_EXTENDER" buttonVisible="true" />
-</SimBase.Document>

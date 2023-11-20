@@ -2,6 +2,8 @@ import {
     ComponentProps, DisplayComponent, Fragment, FSComponent, NodeReference, VNode
 } from '@microsoft/msfs-sdk';
 
+import { checkSimVarLoaded } from '../Utilites';
+
 interface ScrollButtonProps extends ComponentProps {
     class?: string;
     id?: string;
@@ -9,7 +11,7 @@ interface ScrollButtonProps extends ComponentProps {
     onClick?: (input: string) => void;
 }
 export interface ScrollButton {
-    ref: NodeReference<TemplateElement>;
+    ref: NodeReference<any>;
     valueElement?: Element;
 }
 export class ScrollButton extends DisplayComponent<ScrollButtonProps> {
@@ -20,15 +22,22 @@ export class ScrollButton extends DisplayComponent<ScrollButtonProps> {
     }
 
     onAfterRender(node: VNode): void {
-        this.valueElement = this.ref.instance.querySelector(".SearchInput") || undefined;
+        checkSimVarLoaded.then(() => {
+            this.valueElement = this.ref.instance.querySelector(".SearchInput") || undefined;
 
-        if (this.valueElement !== undefined)
-            this.valueElement.addEventListener("DOMSubtreeModified", () => {
-                let input = this.valueElement?.innerHTML || ""
-                if (this.props.onClick) {
-                    this.props.onClick(input)
-                }
-            })
+            if (this.valueElement !== undefined) {
+                this.valueElement.addEventListener("DOMSubtreeModified", () => {
+                    let input = this.ref.instance.value
+                    if (this.props.onClick) {
+                        this.props.onClick(input)
+                    }
+                })
+            }
+        })
+    }
+
+    public setInput(input: number) {
+        this.ref.instance.setCurrentValue(input);
     }
 
     public render(): VNode {

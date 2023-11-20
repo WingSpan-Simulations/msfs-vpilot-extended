@@ -1,5 +1,7 @@
 import { EventBus, EventSubscriber, Publisher } from '@microsoft/msfs-sdk';
 
+import { AircraftSaveManager, AircraftSettings, FlightPlanSaveManager } from './SettingSaveManager';
+
 const websocketUri = "ws://127.0.0.1:8080/";
 
 /* 	INCOMING MESSAGES
@@ -19,7 +21,7 @@ interface NetworkConnect {
 	aircraft: string;
 	selcal: string;
 };
-interface FileFlightPlan {
+export interface vPEFlightPlan {
 	departure: string;
 	arrival: string;
 	alternate: string;
@@ -35,17 +37,26 @@ interface FileFlightPlan {
 	equipment: string;
 	isVFR: boolean;
 }
+export interface Controller {
+	Callsign: string,
+	Frequency: number,
+	Latitude: number,
+	Longitude: number
+}
 
 export interface BackendEvents {
 	establishedConnection: boolean;
 	timeToRetry: number;
-	callsign: string | undefined;
+	networkCallsign: string | undefined;
+	flightPlanReceived: vPEFlightPlan;
+	controllerChange: Controller;
+	controllerDelete: string;
 }
 
 export interface FrontendEvents {
 	connectToNetwork: NetworkConnect;
 	disconnectFromNetwork: boolean;
-	fileFlightPlan: FileFlightPlan;
+	fileFlightPlan: vPEFlightPlan;
 	fetchFlightPlan: boolean;
 }
 
@@ -59,19 +70,24 @@ export interface Backend {
 	timeToRetry: number;
 }
 export class Backend {
-	constructor(eventBus: EventBus) {
+	private readonly aircraftSetting = new AircraftSaveManager(this.bus)
+	private readonly flightPlanSetting = new FlightPlanSaveManager(this.bus)
+	private readonly controllers = new Map<string, Controller>([])
+
+	constructor(public readonly bus: EventBus) {
 		this.websocket;
-		this.publisher = eventBus.getPublisher<BackendEvents>();
-		this.subscriber = eventBus.getSubscriber<FrontendEvents>();
+		this.publisher = this.bus.getPublisher<BackendEvents>();
+		this.subscriber = this.bus.getSubscriber<FrontendEvents>();
 
 		this.handleFrontEndEvents()
-
 		this.createWebsocket();
 	}
 
 	handleFrontEndEvents() {
 		this.subscriber.on("connectToNetwork").handle((values) => {
-			this.websocket.send(`ConnectToNetwork/Callsign:${values.callsign}/TypeCode:${values.aircraft}/SelCal:${values.selcal}`)
+			this.websocket.send(`ConnectToNetwork<|>Callsign:${values.callsign}<|>TypeCode:${values.aircraft}<|>SelCal:${values.selcal}`)
+			this.aircraftSetting.getSetting('callsign').set(values.callsign)
+			this.aircraftSetting.getSetting('selcal').set(values.selcal)
 		})
 
 		this.subscriber.on("disconnectFromNetwork").handle(() => {
@@ -79,9 +95,23 @@ export class Backend {
 		})
 
 		this.subscriber.on("fileFlightPlan").handle((values) => {
-			// console.log(`SendFlight/Departure:${values.departure}/Arrival:${values.arrival}/Alternate:${values.alternate}/CruiseAlt:${values.cruiseAlt}/CruiseSpeed:${values.cruiseSpeed}/Route:${values.route}/Remarks:${values.remarks}/DepartureTime:${values.departureTime}/HoursEnroute:${values.hoursEnroute}/MinsEnroute:${values.minsEnroute}/HoursFuel:${values.hoursFuel}/MinsFuel:${values.minsFuel}/IsVFR:${values.isVFR}`)
-			this.websocket.send(`SendFlightPlan/Departure:${values.departure}/Arrival:${values.arrival}/Alternate:${values.alternate}/CruiseAlt:${values.cruiseAlt}/CruiseSpeed:${values.cruiseSpeed}/Route:${values.route}/Remarks:${values.remarks}/DepartureTime:${values.departureTime}`)
-			this.websocket.send(`SendFlightPlan/HoursEnroute:${values.hoursEnroute}/MinsEnroute:${values.minsEnroute}/HoursFuel:${values.hoursFuel}/MinsFuel:${values.minsFuel}/EquipmentCode:${values.equipment}/IsVFR:${values.isVFR}/FilePlan:true`)
+			this.websocket.send(`SendFlightPlan<|>Departure:${values.departure}<|>Arrival:${values.arrival}<|>Alternate:${values.alternate}<|>CruiseAlt:${values.cruiseAlt / 10}<|>CruiseSpeed:${values.cruiseSpeed / 10}<|>Route:${values.route}<|>Remarks:${values.remarks}<|>DepartureTime:${values.departureTime}`)
+			this.websocket.send(`SendFlightPlan<|>HoursEnroute:${values.hoursEnroute}<|>MinsEnroute:${values.minsEnroute}<|>HoursFuel:${values.hoursFuel}<|>MinsFuel:${values.minsFuel}<|>EquipmentCode:${values.equipment}<|>IsVFR:${values.isVFR}<|>FilePlan:true`)
+
+			this.flightPlanSetting.getSetting('departureAirport').set(values.departure)
+			this.flightPlanSetting.getSetting('arrivalAirport').set(values.arrival)
+			this.flightPlanSetting.getSetting('alternateAirport').set(values.alternate)
+			this.flightPlanSetting.getSetting('departureTime').set(values.departureTime)
+			this.flightPlanSetting.getSetting('equipmentSuffix').set(values.equipment)
+			this.flightPlanSetting.getSetting('hoursEnroute').set(values.hoursEnroute)
+			this.flightPlanSetting.getSetting('minsEnroute').set(values.minsEnroute)
+			this.flightPlanSetting.getSetting('hoursFuel').set(values.hoursFuel)
+			this.flightPlanSetting.getSetting('minsFuel').set(values.minsFuel)
+			this.flightPlanSetting.getSetting('cruiseSpeed').set(values.cruiseSpeed)
+			this.flightPlanSetting.getSetting('cruiseAltitude').set(values.cruiseAlt)
+			this.flightPlanSetting.getSetting('route').set(values.route)
+			this.flightPlanSetting.getSetting('remarks').set(values.remarks)
+			this.flightPlanSetting.getSetting('isVFR').set(values.isVFR)
 		})
 
 		this.subscriber.on("fetchFlightPlan").handle(() => {
@@ -94,8 +124,8 @@ export class Backend {
 		this.publisher.pub("establishedConnection", true);
 	}
 
-	handleMessage(e: any) {
-		let splitMessage: Array<string> = e.data.split("/")
+	handleMessage(e: MessageEvent) {
+		let splitMessage: Array<string> = e.data.split("<|>")
 		let type: string | undefined;
 		let args: { [key: string]: string } = {};
 
@@ -108,22 +138,67 @@ export class Backend {
 			}
 		})
 
-
-		console.log(`Type: ${type}, Args: ${args}`)
+		console.log(`Type: ${type}, Args: ${JSON.stringify(args)}`)
 
 		switch (type) {
 			case "NetworkConnectionEstablished":
-				console.log(args)
-				this.publisher.pub("callsign", args["CallSign"])
+				this.publisher.pub("networkCallsign", args["CallSign"])
 				break;
 			case "DisconnectedFromNetwork":
-				this.publisher.pub("callsign", undefined)
+				this.publisher.pub("networkCallsign", undefined)
 				break;
+			case "FlightPlanReceived":
+				if (args["Callsign"] == this.aircraftSetting.getSetting('callsign').get()) {
+					this.publisher.pub("flightPlanReceived", {
+						departure: args["Departure"],
+						arrival: args["Destination"],
+						alternate: args["Alternate"],
+						cruiseAlt: Number(args["CruiseAlt"]),
+						cruiseSpeed: Number(args["CruiseSpeed"]),
+						route: args["Route"],
+						remarks: args["Remarks"],
+						equipment: args["EquipmentCode"],
+						departureTime: Number(args["DepartureTime"]),
+						hoursEnroute: Number(args["HoursEnroute"]),
+						minsEnroute: Number(args["MinsEnroute"]),
+						hoursFuel: Number(args["HoursFuel"]),
+						minsFuel: Number(args["MinsFuel"]),
+						isVFR: Boolean(args["IsVFR"])
+					})
+				}
+				break;
+			case "ControllerAdded":
+				let controllerAdd: Controller = {
+					Callsign: args["Callsign"],
+					Frequency: Number(args["Frequency"]),
+					Latitude: Number(args["Latitude"]),
+					Longitude: Number(args["Longitude"]),
+				}
+				this.controllers.set(controllerAdd.Callsign, controllerAdd)
+				this.publisher.pub("controllerChange", controllerAdd);
+				break;
+			case "ControllerDeleted":
+				this.controllers.delete(args["Callsign"])
+				this.publisher.pub("controllerDelete", args["Callsign"])
+				break;
+			case "ControllerChangeFreq":
+			case "ControllerChangeLocation":
+				let controllerChange = this.controllers.get(args["Callsign"]);
+				if (controllerChange) {
+					controllerChange.Frequency = args["Frequency"] ? Number(args["Frequency"]) : controllerChange.Frequency
+					controllerChange.Latitude = args["Latitude"] ? Number(args["Latitude"]) : controllerChange.Latitude
+					controllerChange.Longitude = args["Longitude"] ? Number(args["Longitude"]) : controllerChange.Longitude
+
+					this.controllers.set(controllerChange.Callsign, controllerChange)
+					this.publisher.pub("controllerChange", controllerChange);
+				}
+				break;
+
 		}
 	}
 
 	handleError(e: any) {
-		console.log(`!! WebSocket Error: ${e.data} !!`);
+		console.log(`!! WebSocket Error: ${e} !!`);
 	}
 
 	handleConnectionClose(e: any) {

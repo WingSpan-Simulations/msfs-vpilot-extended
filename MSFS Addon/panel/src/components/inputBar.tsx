@@ -9,48 +9,49 @@ interface InputBarProps extends ComponentProps {
     onInput?: (input: string, ref: NodeReference<any>) => void;
     requireInput?: boolean
 }
-export interface InputBar {
-    ref: NodeReference<any>
-}
+
 export class InputBar extends DisplayComponent<InputBarProps> {
-    constructor(props: InputBarProps) {
-        super(props)
+    private readonly ref = FSComponent.createRef<any>();
 
-        this.ref = FSComponent.createRef<any>();
-    }
-
-    onAfterRender(node: VNode): void {
-        this.ref.instance.addEventListener("input", () => {
-            let input = this.ref.instance._valueStr;
-            if (input !== undefined) {
-                if (this.props.transformInput) {
-                    input = this.props.transformInput(input)
-                    this.ref.instance.setValue(input)
-                }
-                if (this.props.onInput) {
-                    this.props.onInput(input, this.ref)
-                }
-                if (this.props.requireInput) {
-                    if (input == "") {
-                        this.setInputError()
-                    } else {
-                        this.setInputError(true)
-                    }
-                }
-            }
-        })
+    public onAfterRender(node: VNode): void {
+        this.ref.instance.addEventListener("input", () => this.onInputSent())
 
         if (this.props.requireInput) {
             this.setInputError()
         }
     }
 
-    setInputError(remove?: boolean) {
+    private setInputError(remove?: boolean) {
         if (this.ref.instance.classList.contains("error") !== true && remove !== true) {
             this.ref.instance.classList.add("error")
         } else if (this.ref.instance.classList.contains("error") === true && remove === true) {
             this.ref.instance.classList.remove("error")
         }
+    }
+
+    private onInputSent() {
+        let input = this.ref.instance._valueStr;
+        if (input !== undefined) {
+            if (this.props.transformInput) {
+                input = this.props.transformInput(input)
+                this.ref.instance.setValue(input)
+            }
+            if (this.props.onInput) {
+                this.props.onInput(input, this.ref)
+            }
+            if (this.props.requireInput) {
+                if (input == "") {
+                    this.setInputError()
+                } else {
+                    this.setInputError(true)
+                }
+            }
+        }
+    }
+
+    public setInputText(input: string) {
+        this.ref.instance.setValue(input)
+        this.onInputSent()
     }
 
     public getInputBar() {
