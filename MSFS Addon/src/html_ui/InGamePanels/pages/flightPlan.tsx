@@ -99,11 +99,11 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
                 minsFuel: this.fuelAvailable.minutes,
                 equipment: this.equipment,
                 isVFR: this.selectedFlightRules == "visual"
-            })
+            }, true)
         })
 
         this.fetchButtonRef.instance.addEventListener("click", () => {
-            this.publisher.pub("fetchFlightPlan", true)
+            this.publisher.pub("fetchFlightPlan", true, true)
         })
 
         this.subscriber.on('flightPlanReceived').handle((flightPlan) => this.setInputs(flightPlan))

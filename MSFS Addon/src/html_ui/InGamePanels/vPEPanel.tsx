@@ -13,7 +13,9 @@ import { FlightPlanPage } from './pages/flightPlan';
 import { OnlineATC } from './pages/onlineATC';
 import { vPESettingSaveManager } from './SettingSaveManager';
 import { checkSimVarLoaded } from './Utilites';
-import { Backend, BackendEvents, FrontendEvents } from './vPEBackend';
+import { BackendEvents, FrontendEvents } from './vPEBackend';
+
+// import { Backend, BackendEvents, FrontendEvents } from './vPEBackend';
 
 type possiblePages = "awaitConnection" | "vatsimConnect" | "flightPlan" | "onlineATC"
 
@@ -24,7 +26,7 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
     private readonly subscriber = this.bus.getSubscriber<BackendEvents>();
     private readonly publisher = this.bus.getPublisher<FrontendEvents>();
     private readonly settingSaveManager = new vPESettingSaveManager(this.bus)
-    private readonly backend = new Backend(this.bus);
+    // private readonly backend = new Backend(this.bus);
 
     private readonly callsign = Subject.create<string | undefined>(undefined);
     private readonly timeToRetry = Subject.create<number>(0);
@@ -40,12 +42,6 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
 
     constructor(props: ComponentProps) {
         super(props);
-
-        checkSimVarLoaded.then(() => {
-            const key = `${SimVar.GetSimVarValue('ATC MODEL', 'string')}.profile_1`
-            this.settingSaveManager.load(key)
-            this.settingSaveManager.startAutoSave(key)
-        })
     }
 
     onAfterRender(node: VNode): void {
@@ -53,7 +49,7 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
         this.subscriber.on("timeToRetry").handle(value => { this.timeToRetry.set(value) });
         this.subscriber.on("networkCallsign").handle(value => this.vatsimConnectionStateChanged(value))
         this.disconnectRef.instance.addEventListener("click", () => {
-            this.publisher.pub("disconnectFromNetwork", true)
+            this.publisher.pub("disconnectFromNetwork", true, true)
         })
 
         this.gnss.startPublish();

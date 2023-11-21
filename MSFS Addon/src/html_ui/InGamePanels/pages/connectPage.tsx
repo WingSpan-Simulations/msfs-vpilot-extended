@@ -4,7 +4,7 @@ import {
 } from '@microsoft/msfs-sdk';
 
 import { InputBar } from '../components/inputBar';
-import { AircraftSaveManager, vPESettingSaveManager } from '../SettingSaveManager';
+import { AircraftSaveManager } from '../SettingSaveManager';
 import { checkSimVarLoaded } from '../Utilites';
 import { FrontendEvents } from '../vPEBackend';
 
@@ -153,7 +153,7 @@ export class ConnectPage extends DisplayComponent<ConnectProps> {
                 callsign: this.callsign,
                 aircraft: this.aircraft,
                 selcal: this.selcal
-            })
+            }, true)
         }
     }
 

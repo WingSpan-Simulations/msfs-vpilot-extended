@@ -2,8 +2,8 @@
   "content": [
     {
       "path": "tsconfig.tsbuildinfo",
-      "size": 22722,
-      "date": 133449998876765372
+      "size": 22939,
+      "date": 133450025666413250
     },
     {
       "path": "html_ui/icons/toolbar/ICON_TOOLBAR_MEQOLO_VPILOT_EXTENDER.svg",
@@ -17,13 +17,13 @@
     },
     {
       "path": "html_ui/InGamePanels/vPEPanel/vPEPanel.html",
-      "size": 2736,
-      "date": 133449123472116778
+      "size": 2745,
+      "date": 133450010747401177
     },
     {
       "path": "html_ui/InGamePanels/vPEPanel/vPEPanel.js",
-      "size": 1006957,
-      "date": 133450001152764872
+      "size": 998082,
+      "date": 133450025666463869
     },
     {
       "path": "html_ui/InGamePanels/vPEPanel/vendor/msfssdk.js",
@@ -32,18 +32,18 @@
     },
     {
       "path": "html_ui/InGamePanels/vPEPanel/vendor/tailwind.css",
-      "size": 9473,
-      "date": 133449987939034096
+      "size": 14735,
+      "date": 133450009055356052
     },
     {
       "path": "html_ui/Pages/ToolBar/ToolBar.html",
-      "size": 2259,
-      "date": 133450001078073846
+      "size": 2832,
+      "date": 133450019815361036
     },
     {
       "path": "html_ui/Pages/ToolBar/vPilotPersistent/vPE.js",
-      "size": 150,
-      "date": 133450001161263213
+      "size": 938281,
+      "date": 133450025685643781
     },
     {
       "path": "InGamePanels/meqolo-vpilot-extender.spb",

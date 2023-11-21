@@ -20407,7 +20407,7 @@
                     callsign: this.callsign,
                     aircraft: this.aircraft,
                     selcal: this.selcal
-                });
+                }, true);
             }
         }
         transformInput(input, maxLength, regex) {
@@ -20619,10 +20619,10 @@
                     minsFuel: this.fuelAvailable.minutes,
                     equipment: this.equipment,
                     isVFR: this.selectedFlightRules == "visual"
-                });
+                }, true);
             });
             this.fetchButtonRef.instance.addEventListener("click", () => {
-                this.publisher.pub("fetchFlightPlan", true);
+                this.publisher.pub("fetchFlightPlan", true, true);
             });
             this.subscriber.on('flightPlanReceived').handle((flightPlan) => this.setInputs(flightPlan));
         }
@@ -20903,161 +20903,6 @@
         }
     }
 
-    const websocketUri = "ws://127.0.0.1:8080/";
-    class Backend {
-        constructor(bus) {
-            this.bus = bus;
-            this.aircraftSetting = new AircraftSaveManager(this.bus);
-            this.flightPlanSetting = new FlightPlanSaveManager(this.bus);
-            this.controllers = new Map([]);
-            this.websocket;
-            this.publisher = this.bus.getPublisher();
-            this.subscriber = this.bus.getSubscriber();
-            this.handleFrontEndEvents();
-            this.createWebsocket();
-        }
-        handleFrontEndEvents() {
-            this.subscriber.on("connectToNetwork").handle((values) => {
-                this.websocket.send(`ConnectToNetwork<|>Callsign:${values.callsign}<|>TypeCode:${values.aircraft}<|>SelCal:${values.selcal}`);
-                this.aircraftSetting.getSetting('callsign').set(values.callsign);
-                this.aircraftSetting.getSetting('selcal').set(values.selcal);
-            });
-            this.subscriber.on("disconnectFromNetwork").handle(() => {
-                this.websocket.send("DisconnectFromNetwork");
-            });
-            this.subscriber.on("fileFlightPlan").handle((values) => {
-                this.websocket.send(`SendFlightPlan<|>Departure:${values.departure}<|>Arrival:${values.arrival}<|>Alternate:${values.alternate}<|>CruiseAlt:${values.cruiseAlt / 10}<|>CruiseSpeed:${values.cruiseSpeed / 10}<|>Route:${values.route}<|>Remarks:${values.remarks}<|>DepartureTime:${values.departureTime}`);
-                this.websocket.send(`SendFlightPlan<|>HoursEnroute:${values.hoursEnroute}<|>MinsEnroute:${values.minsEnroute}<|>HoursFuel:${values.hoursFuel}<|>MinsFuel:${values.minsFuel}<|>EquipmentCode:${values.equipment}<|>IsVFR:${values.isVFR}<|>FilePlan:true`);
-                this.flightPlanSetting.getSetting('departureAirport').set(values.departure);
-                this.flightPlanSetting.getSetting('arrivalAirport').set(values.arrival);
-                this.flightPlanSetting.getSetting('alternateAirport').set(values.alternate);
-                this.flightPlanSetting.getSetting('departureTime').set(values.departureTime);
-                this.flightPlanSetting.getSetting('equipmentSuffix').set(values.equipment);
-                this.flightPlanSetting.getSetting('hoursEnroute').set(values.hoursEnroute);
-                this.flightPlanSetting.getSetting('minsEnroute').set(values.minsEnroute);
-                this.flightPlanSetting.getSetting('hoursFuel').set(values.hoursFuel);
-                this.flightPlanSetting.getSetting('minsFuel').set(values.minsFuel);
-                this.flightPlanSetting.getSetting('cruiseSpeed').set(values.cruiseSpeed);
-                this.flightPlanSetting.getSetting('cruiseAltitude').set(values.cruiseAlt);
-                this.flightPlanSetting.getSetting('route').set(values.route);
-                this.flightPlanSetting.getSetting('remarks').set(values.remarks);
-                this.flightPlanSetting.getSetting('isVFR').set(values.isVFR);
-            });
-            this.subscriber.on("fetchFlightPlan").handle(() => {
-                this.websocket.send("FetchFlightPlan");
-            });
-        }
-        handleEstablishedConnection(e) {
-            this.awaitingConnection = false;
-            this.publisher.pub("establishedConnection", true);
-        }
-        handleMessage(e) {
-            let splitMessage = e.data.split("<|>");
-            let type;
-            let args = {};
-            splitMessage.forEach((stringPair) => {
-                let strings = stringPair.split(":");
-                if (strings.length == 1) {
-                    type = strings[0];
-                }
-                else {
-                    args[strings[0]] = strings[1];
-                }
-            });
-            console.log(`Type: ${type}, Args: ${JSON.stringify(args)}`);
-            switch (type) {
-                case "NetworkConnectionEstablished":
-                    this.publisher.pub("networkCallsign", args["CallSign"]);
-                    break;
-                case "DisconnectedFromNetwork":
-                    this.publisher.pub("networkCallsign", undefined);
-                    break;
-                case "FlightPlanReceived":
-                    if (args["Callsign"] == this.aircraftSetting.getSetting('callsign').get()) {
-                        this.publisher.pub("flightPlanReceived", {
-                            departure: args["Departure"],
-                            arrival: args["Destination"],
-                            alternate: args["Alternate"],
-                            cruiseAlt: Number(args["CruiseAlt"]),
-                            cruiseSpeed: Number(args["CruiseSpeed"]),
-                            route: args["Route"],
-                            remarks: args["Remarks"],
-                            equipment: args["EquipmentCode"],
-                            departureTime: Number(args["DepartureTime"]),
-                            hoursEnroute: Number(args["HoursEnroute"]),
-                            minsEnroute: Number(args["MinsEnroute"]),
-                            hoursFuel: Number(args["HoursFuel"]),
-                            minsFuel: Number(args["MinsFuel"]),
-                            isVFR: Boolean(args["IsVFR"])
-                        });
-                    }
-                    break;
-                case "ControllerAdded":
-                    let controllerAdd = {
-                        Callsign: args["Callsign"],
-                        Frequency: Number(args["Frequency"]),
-                        Latitude: Number(args["Latitude"]),
-                        Longitude: Number(args["Longitude"]),
-                    };
-                    this.controllers.set(controllerAdd.Callsign, controllerAdd);
-                    this.publisher.pub("controllerChange", controllerAdd);
-                    break;
-                case "ControllerDeleted":
-                    this.controllers.delete(args["Callsign"]);
-                    this.publisher.pub("controllerDelete", args["Callsign"]);
-                    break;
-                case "ControllerChangeFreq":
-                case "ControllerChangeLocation":
-                    let controllerChange = this.controllers.get(args["Callsign"]);
-                    if (controllerChange) {
-                        controllerChange.Frequency = args["Frequency"] ? Number(args["Frequency"]) : controllerChange.Frequency;
-                        controllerChange.Latitude = args["Latitude"] ? Number(args["Latitude"]) : controllerChange.Latitude;
-                        controllerChange.Longitude = args["Longitude"] ? Number(args["Longitude"]) : controllerChange.Longitude;
-                        this.controllers.set(controllerChange.Callsign, controllerChange);
-                        this.publisher.pub("controllerChange", controllerChange);
-                    }
-                    break;
-            }
-        }
-        handleError(e) {
-            console.log(`!! WebSocket Error: ${e} !!`);
-        }
-        handleConnectionClose(e) {
-            if (this.websocket) {
-                this.websocket.close();
-            }
-            this.publisher.pub("establishedConnection", false);
-            if (!this.awaitingConnection) {
-                this.awaitingConnection = true;
-                this.timeToRetry = 20;
-                if (this.connectionInterval) {
-                    clearInterval(this.connectionInterval);
-                    this.connectionInterval = undefined;
-                }
-                this.connectionInterval = setInterval(() => {
-                    this.timeToRetry -= 1;
-                    this.publisher.pub("timeToRetry", this.timeToRetry);
-                    if (this.timeToRetry == 0) {
-                        this.timeToRetry = 20;
-                        this.createWebsocket();
-                    }
-                }, 1000);
-            }
-        }
-        createWebsocket() {
-            if (this.connectionInterval) {
-                clearInterval(this.connectionInterval);
-                this.connectionInterval = undefined;
-            }
-            this.awaitingConnection = false;
-            this.websocket = new WebSocket(websocketUri);
-            this.websocket.onopen = (e) => this.handleEstablishedConnection(e);
-            this.websocket.onclose = (e) => this.handleConnectionClose(e);
-            this.websocket.onmessage = (e) => this.handleMessage(e);
-            this.websocket.onerror = (e) => this.handleError(e);
-        }
-    }
-
     /// <reference types='@microsoft/msfs-types' />
     class VPEPanel extends DisplayComponent {
         constructor(props) {
@@ -21068,7 +20913,7 @@
             this.subscriber = this.bus.getSubscriber();
             this.publisher = this.bus.getPublisher();
             this.settingSaveManager = new vPESettingSaveManager(this.bus);
-            this.backend = new Backend(this.bus);
+            // private readonly backend = new Backend(this.bus);
             this.callsign = Subject.create(undefined);
             this.timeToRetry = Subject.create(0);
             this.awaitConnectionRef = FSComponent.createRef();
@@ -21079,18 +20924,13 @@
             this.disconnectRef = FSComponent.createRef();
             this.scrollRef = FSComponent.createRef();
             this.connection = false;
-            checkSimVarLoaded.then(() => {
-                const key = `${SimVar.GetSimVarValue('ATC MODEL', 'string')}.profile_1`;
-                this.settingSaveManager.load(key);
-                this.settingSaveManager.startAutoSave(key);
-            });
         }
         onAfterRender(node) {
             this.subscriber.on("establishedConnection").handle(value => this.websocketConnectionStateChanged(value));
             this.subscriber.on("timeToRetry").handle(value => { this.timeToRetry.set(value); });
             this.subscriber.on("networkCallsign").handle(value => this.vatsimConnectionStateChanged(value));
             this.disconnectRef.instance.addEventListener("click", () => {
-                this.publisher.pub("disconnectFromNetwork", true);
+                this.publisher.pub("disconnectFromNetwork", true, true);
             });
             this.gnss.startPublish();
             this.clock.startPublish();

@@ -1,20 +1,22 @@
-import { EventBus, EventSubscriber, Publisher } from '@microsoft/msfs-sdk';
+// import { EventBus, EventSubscriber, Publisher } from '@microsoft/msfs-sdk';
 
-import { AircraftSaveManager, AircraftSettings, FlightPlanSaveManager } from './SettingSaveManager';
+// import {
+// 	AircraftSaveManager, AircraftSettings, FlightPlanSaveManager, vPESettingSaveManager
+// } from './SettingSaveManager';
 
-const websocketUri = "ws://127.0.0.1:8080/";
+// const websocketUri = "ws://127.0.0.1:8080/";
 
-/* 	INCOMING MESSAGES
+// /* 	INCOMING MESSAGES
 
-NetworkConnectionEstablished/CallSign:###/TypeCode:###/SelCal:###
-DisconnectedFromNetwork
+// NetworkConnectionEstablished/CallSign:###/TypeCode:###/SelCal:###
+// DisconnectedFromNetwork
 
-======================================================================
-	OUTGOING MESSAGES
-ConnectToNetwork/Callsign:###/TypeCode:###/SelCal:###
-SendFlightPlan/Departure:####/Arrival:####/Alternate:####/CruiseAlt:#####/CruiseSpeed:####/Route:###/Remarks:###/DepartureTime:####/HoursEnroute:##/MinsEnroute:##/HoursFuel:##/MinsFuel:##/Equipment:#/IsVFR:####/File:true
-FetchFlightPlan
-*/
+// ======================================================================
+// 	OUTGOING MESSAGES
+// ConnectToNetwork/Callsign:###/TypeCode:###/SelCal:###
+// SendFlightPlan/Departure:####/Arrival:####/Alternate:####/CruiseAlt:#####/CruiseSpeed:####/Route:###/Remarks:###/DepartureTime:####/HoursEnroute:##/MinsEnroute:##/HoursFuel:##/MinsFuel:##/Equipment:#/IsVFR:####/File:true
+// FetchFlightPlan
+// */
 
 interface NetworkConnect {
 	callsign: string;
@@ -51,6 +53,7 @@ export interface BackendEvents {
 	flightPlanReceived: vPEFlightPlan;
 	controllerChange: Controller;
 	controllerDelete: string;
+	created: string;
 }
 
 export interface FrontendEvents {
@@ -60,187 +63,192 @@ export interface FrontendEvents {
 	fetchFlightPlan: boolean;
 }
 
-export interface Backend {
-	publisher: Publisher<BackendEvents>;
-	subscriber: EventSubscriber<FrontendEvents>;
+// export interface Backend {
+// 	publisher: Publisher<BackendEvents>;
+// 	subscriber: EventSubscriber<FrontendEvents>;
 
-	websocket: WebSocket;
-	awaitingConnection: boolean;
-	connectionInterval: NodeJS.Timer | undefined;
-	timeToRetry: number;
-}
-export class Backend {
-	private readonly aircraftSetting = new AircraftSaveManager(this.bus)
-	private readonly flightPlanSetting = new FlightPlanSaveManager(this.bus)
-	private readonly controllers = new Map<string, Controller>([])
+// 	websocket: WebSocket;
+// 	awaitingConnection: boolean;
+// 	connectionInterval: NodeJS.Timer | undefined;
+// 	timeToRetry: number;
+// }
+// export class Backend {
+// 	private readonly settingSaveManager = new vPESettingSaveManager(this.bus)
+// 	private readonly aircraftSetting = new AircraftSaveManager(this.bus)
+// 	private readonly flightPlanSetting = new FlightPlanSaveManager(this.bus)
+// 	private readonly controllers = new Map<string, Controller>([])
 
-	constructor(public readonly bus: EventBus) {
-		this.websocket;
-		this.publisher = this.bus.getPublisher<BackendEvents>();
-		this.subscriber = this.bus.getSubscriber<FrontendEvents>();
+// 	constructor(public readonly bus: EventBus) {
+// 		this.websocket;
+// 		this.publisher = this.bus.getPublisher<BackendEvents>();
+// 		this.subscriber = this.bus.getSubscriber<FrontendEvents>();
 
-		this.handleFrontEndEvents()
-		this.createWebsocket();
-	}
+// 		this.handleFrontEndEvents()
+// 		this.createWebsocket();
+// 	}
 
-	handleFrontEndEvents() {
-		this.subscriber.on("connectToNetwork").handle((values) => {
-			this.websocket.send(`ConnectToNetwork<|>Callsign:${values.callsign}<|>TypeCode:${values.aircraft}<|>SelCal:${values.selcal}`)
-			this.aircraftSetting.getSetting('callsign').set(values.callsign)
-			this.aircraftSetting.getSetting('selcal').set(values.selcal)
-		})
+// 	handleFrontEndEvents() {
+// 		this.bus.getSubscriber<BackendEvents>().on('created').handle((data) => {
+// 			console.log("CREATE RECEIVE", data)
+// 		})
 
-		this.subscriber.on("disconnectFromNetwork").handle(() => {
-			this.websocket.send("DisconnectFromNetwork")
-		})
+// 		this.subscriber.on("connectToNetwork").handle((values) => {
+// 			this.websocket.send(`ConnectToNetwork<|>Callsign:${values.callsign}<|>TypeCode:${values.aircraft}<|>SelCal:${values.selcal}`)
+// 			this.aircraftSetting.getSetting('callsign').set(values.callsign)
+// 			this.aircraftSetting.getSetting('selcal').set(values.selcal)
+// 		})
 
-		this.subscriber.on("fileFlightPlan").handle((values) => {
-			this.websocket.send(`SendFlightPlan<|>Departure:${values.departure}<|>Arrival:${values.arrival}<|>Alternate:${values.alternate}<|>CruiseAlt:${values.cruiseAlt / 10}<|>CruiseSpeed:${values.cruiseSpeed / 10}<|>Route:${values.route}<|>Remarks:${values.remarks}<|>DepartureTime:${values.departureTime}`)
-			this.websocket.send(`SendFlightPlan<|>HoursEnroute:${values.hoursEnroute}<|>MinsEnroute:${values.minsEnroute}<|>HoursFuel:${values.hoursFuel}<|>MinsFuel:${values.minsFuel}<|>EquipmentCode:${values.equipment}<|>IsVFR:${values.isVFR}<|>FilePlan:true`)
+// 		this.subscriber.on("disconnectFromNetwork").handle(() => {
+// 			this.websocket.send("DisconnectFromNetwork")
+// 		})
 
-			this.flightPlanSetting.getSetting('departureAirport').set(values.departure)
-			this.flightPlanSetting.getSetting('arrivalAirport').set(values.arrival)
-			this.flightPlanSetting.getSetting('alternateAirport').set(values.alternate)
-			this.flightPlanSetting.getSetting('departureTime').set(values.departureTime)
-			this.flightPlanSetting.getSetting('equipmentSuffix').set(values.equipment)
-			this.flightPlanSetting.getSetting('hoursEnroute').set(values.hoursEnroute)
-			this.flightPlanSetting.getSetting('minsEnroute').set(values.minsEnroute)
-			this.flightPlanSetting.getSetting('hoursFuel').set(values.hoursFuel)
-			this.flightPlanSetting.getSetting('minsFuel').set(values.minsFuel)
-			this.flightPlanSetting.getSetting('cruiseSpeed').set(values.cruiseSpeed)
-			this.flightPlanSetting.getSetting('cruiseAltitude').set(values.cruiseAlt)
-			this.flightPlanSetting.getSetting('route').set(values.route)
-			this.flightPlanSetting.getSetting('remarks').set(values.remarks)
-			this.flightPlanSetting.getSetting('isVFR').set(values.isVFR)
-		})
+// 		this.subscriber.on("fileFlightPlan").handle((values) => {
+// 			this.websocket.send(`SendFlightPlan<|>Departure:${values.departure}<|>Arrival:${values.arrival}<|>Alternate:${values.alternate}<|>CruiseAlt:${values.cruiseAlt / 10}<|>CruiseSpeed:${values.cruiseSpeed / 10}<|>Route:${values.route}<|>Remarks:${values.remarks}<|>DepartureTime:${values.departureTime}`)
+// 			this.websocket.send(`SendFlightPlan<|>HoursEnroute:${values.hoursEnroute}<|>MinsEnroute:${values.minsEnroute}<|>HoursFuel:${values.hoursFuel}<|>MinsFuel:${values.minsFuel}<|>EquipmentCode:${values.equipment}<|>IsVFR:${values.isVFR}<|>FilePlan:true`)
 
-		this.subscriber.on("fetchFlightPlan").handle(() => {
-			this.websocket.send("FetchFlightPlan")
-		})
-	}
+// 			this.flightPlanSetting.getSetting('departureAirport').set(values.departure)
+// 			this.flightPlanSetting.getSetting('arrivalAirport').set(values.arrival)
+// 			this.flightPlanSetting.getSetting('alternateAirport').set(values.alternate)
+// 			this.flightPlanSetting.getSetting('departureTime').set(values.departureTime)
+// 			this.flightPlanSetting.getSetting('equipmentSuffix').set(values.equipment)
+// 			this.flightPlanSetting.getSetting('hoursEnroute').set(values.hoursEnroute)
+// 			this.flightPlanSetting.getSetting('minsEnroute').set(values.minsEnroute)
+// 			this.flightPlanSetting.getSetting('hoursFuel').set(values.hoursFuel)
+// 			this.flightPlanSetting.getSetting('minsFuel').set(values.minsFuel)
+// 			this.flightPlanSetting.getSetting('cruiseSpeed').set(values.cruiseSpeed)
+// 			this.flightPlanSetting.getSetting('cruiseAltitude').set(values.cruiseAlt)
+// 			this.flightPlanSetting.getSetting('route').set(values.route)
+// 			this.flightPlanSetting.getSetting('remarks').set(values.remarks)
+// 			this.flightPlanSetting.getSetting('isVFR').set(values.isVFR)
+// 		})
 
-	handleEstablishedConnection(e: any) {
-		this.awaitingConnection = false;
-		this.publisher.pub("establishedConnection", true);
-	}
+// 		this.subscriber.on("fetchFlightPlan").handle(() => {
+// 			this.websocket.send("FetchFlightPlan")
+// 		})
+// 	}
 
-	handleMessage(e: MessageEvent) {
-		let splitMessage: Array<string> = e.data.split("<|>")
-		let type: string | undefined;
-		let args: { [key: string]: string } = {};
+// 	handleEstablishedConnection(e: any) {
+// 		this.awaitingConnection = false;
+// 		this.publisher.pub("establishedConnection", true);
+// 	}
 
-		splitMessage.forEach((stringPair) => {
-			let strings = stringPair.split(":")
-			if (strings.length == 1) {
-				type = strings[0]
-			} else {
-				args[strings[0]] = strings[1];
-			}
-		})
+// 	handleMessage(e: MessageEvent) {
+// 		let splitMessage: Array<string> = e.data.split("<|>")
+// 		let type: string | undefined;
+// 		let args: { [key: string]: string } = {};
 
-		console.log(`Type: ${type}, Args: ${JSON.stringify(args)}`)
+// 		splitMessage.forEach((stringPair) => {
+// 			let strings = stringPair.split(":")
+// 			if (strings.length == 1) {
+// 				type = strings[0]
+// 			} else {
+// 				args[strings[0]] = strings[1];
+// 			}
+// 		})
 
-		switch (type) {
-			case "NetworkConnectionEstablished":
-				this.publisher.pub("networkCallsign", args["CallSign"])
-				break;
-			case "DisconnectedFromNetwork":
-				this.publisher.pub("networkCallsign", undefined)
-				break;
-			case "FlightPlanReceived":
-				if (args["Callsign"] == this.aircraftSetting.getSetting('callsign').get()) {
-					this.publisher.pub("flightPlanReceived", {
-						departure: args["Departure"],
-						arrival: args["Destination"],
-						alternate: args["Alternate"],
-						cruiseAlt: Number(args["CruiseAlt"]),
-						cruiseSpeed: Number(args["CruiseSpeed"]),
-						route: args["Route"],
-						remarks: args["Remarks"],
-						equipment: args["EquipmentCode"],
-						departureTime: Number(args["DepartureTime"]),
-						hoursEnroute: Number(args["HoursEnroute"]),
-						minsEnroute: Number(args["MinsEnroute"]),
-						hoursFuel: Number(args["HoursFuel"]),
-						minsFuel: Number(args["MinsFuel"]),
-						isVFR: Boolean(args["IsVFR"])
-					})
-				}
-				break;
-			case "ControllerAdded":
-				let controllerAdd: Controller = {
-					Callsign: args["Callsign"],
-					Frequency: Number(args["Frequency"]),
-					Latitude: Number(args["Latitude"]),
-					Longitude: Number(args["Longitude"]),
-				}
-				this.controllers.set(controllerAdd.Callsign, controllerAdd)
-				this.publisher.pub("controllerChange", controllerAdd);
-				break;
-			case "ControllerDeleted":
-				this.controllers.delete(args["Callsign"])
-				this.publisher.pub("controllerDelete", args["Callsign"])
-				break;
-			case "ControllerChangeFreq":
-			case "ControllerChangeLocation":
-				let controllerChange = this.controllers.get(args["Callsign"]);
-				if (controllerChange) {
-					controllerChange.Frequency = args["Frequency"] ? Number(args["Frequency"]) : controllerChange.Frequency
-					controllerChange.Latitude = args["Latitude"] ? Number(args["Latitude"]) : controllerChange.Latitude
-					controllerChange.Longitude = args["Longitude"] ? Number(args["Longitude"]) : controllerChange.Longitude
+// 		console.log(`Type: ${type}, Args: ${JSON.stringify(args)}`)
 
-					this.controllers.set(controllerChange.Callsign, controllerChange)
-					this.publisher.pub("controllerChange", controllerChange);
-				}
-				break;
+// 		switch (type) {
+// 			case "NetworkConnectionEstablished":
+// 				this.publisher.pub("networkCallsign", args["CallSign"])
+// 				break;
+// 			case "DisconnectedFromNetwork":
+// 				this.publisher.pub("networkCallsign", undefined)
+// 				break;
+// 			case "FlightPlanReceived":
+// 				if (args["Callsign"] == this.aircraftSetting.getSetting('callsign').get()) {
+// 					this.publisher.pub("flightPlanReceived", {
+// 						departure: args["Departure"],
+// 						arrival: args["Destination"],
+// 						alternate: args["Alternate"],
+// 						cruiseAlt: Number(args["CruiseAlt"]),
+// 						cruiseSpeed: Number(args["CruiseSpeed"]),
+// 						route: args["Route"],
+// 						remarks: args["Remarks"],
+// 						equipment: args["EquipmentCode"],
+// 						departureTime: Number(args["DepartureTime"]),
+// 						hoursEnroute: Number(args["HoursEnroute"]),
+// 						minsEnroute: Number(args["MinsEnroute"]),
+// 						hoursFuel: Number(args["HoursFuel"]),
+// 						minsFuel: Number(args["MinsFuel"]),
+// 						isVFR: Boolean(args["IsVFR"])
+// 					})
+// 				}
+// 				break;
+// 			case "ControllerAdded":
+// 				let controllerAdd: Controller = {
+// 					Callsign: args["Callsign"],
+// 					Frequency: Number(args["Frequency"]),
+// 					Latitude: Number(args["Latitude"]),
+// 					Longitude: Number(args["Longitude"]),
+// 				}
+// 				this.controllers.set(controllerAdd.Callsign, controllerAdd)
+// 				this.publisher.pub("controllerChange", controllerAdd);
+// 				break;
+// 			case "ControllerDeleted":
+// 				this.controllers.delete(args["Callsign"])
+// 				this.publisher.pub("controllerDelete", args["Callsign"])
+// 				break;
+// 			case "ControllerChangeFreq":
+// 			case "ControllerChangeLocation":
+// 				let controllerChange = this.controllers.get(args["Callsign"]);
+// 				if (controllerChange) {
+// 					controllerChange.Frequency = args["Frequency"] ? Number(args["Frequency"]) : controllerChange.Frequency
+// 					controllerChange.Latitude = args["Latitude"] ? Number(args["Latitude"]) : controllerChange.Latitude
+// 					controllerChange.Longitude = args["Longitude"] ? Number(args["Longitude"]) : controllerChange.Longitude
 
-		}
-	}
+// 					this.controllers.set(controllerChange.Callsign, controllerChange)
+// 					this.publisher.pub("controllerChange", controllerChange);
+// 				}
+// 				break;
 
-	handleError(e: any) {
-		console.log(`!! WebSocket Error: ${e} !!`);
-	}
+// 		}
+// 	}
 
-	handleConnectionClose(e: any) {
-		if (this.websocket) {
-			this.websocket.close();
-		}
+// 	handleError(e: any) {
+// 		console.log(`!! WebSocket Error: ${e} !!`);
+// 	}
 
-		this.publisher.pub("establishedConnection", false);
+// 	handleConnectionClose(e: any) {
+// 		if (this.websocket) {
+// 			this.websocket.close();
+// 		}
 
-		if (!this.awaitingConnection) {
-			this.awaitingConnection = true;
-			this.timeToRetry = 20;
+// 		this.publisher.pub("establishedConnection", false);
 
-			if (this.connectionInterval) {
-				clearInterval(this.connectionInterval);
-				this.connectionInterval = undefined;
-			}
+// 		if (!this.awaitingConnection) {
+// 			this.awaitingConnection = true;
+// 			this.timeToRetry = 20;
 
-			this.connectionInterval = setInterval(() => {
-				this.timeToRetry -= 1;
+// 			if (this.connectionInterval) {
+// 				clearInterval(this.connectionInterval);
+// 				this.connectionInterval = undefined;
+// 			}
 
-				this.publisher.pub("timeToRetry", this.timeToRetry);
+// 			this.connectionInterval = setInterval(() => {
+// 				this.timeToRetry -= 1;
 
-				if (this.timeToRetry == 0) {
-					this.timeToRetry = 20;
-					this.createWebsocket();
-				}
-			}, 1000);
-		}
-	}
+// 				this.publisher.pub("timeToRetry", this.timeToRetry);
 
-	createWebsocket() {
-		if (this.connectionInterval) {
-			clearInterval(this.connectionInterval);
-			this.connectionInterval = undefined;
-		}
+// 				if (this.timeToRetry == 0) {
+// 					this.timeToRetry = 20;
+// 					this.createWebsocket();
+// 				}
+// 			}, 1000);
+// 		}
+// 	}
 
-		this.awaitingConnection = false
-		this.websocket = new WebSocket(websocketUri);
-		this.websocket.onopen = (e) => this.handleEstablishedConnection(e);
-		this.websocket.onclose = (e) => this.handleConnectionClose(e);
-		this.websocket.onmessage = (e) => this.handleMessage(e);
-		this.websocket.onerror = (e) => this.handleError(e);
-	}
-}
+// 	createWebsocket() {
+// 		if (this.connectionInterval) {
+// 			clearInterval(this.connectionInterval);
+// 			this.connectionInterval = undefined;
+// 		}
+
+// 		this.awaitingConnection = false
+// 		this.websocket = new WebSocket(websocketUri);
+// 		this.websocket.onopen = (e) => this.handleEstablishedConnection(e);
+// 		this.websocket.onclose = (e) => this.handleConnectionClose(e);
+// 		this.websocket.onmessage = (e) => this.handleMessage(e);
+// 		this.websocket.onerror = (e) => this.handleError(e);
+// 	}
+// }
