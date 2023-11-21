@@ -20913,7 +20913,6 @@
             this.subscriber = this.bus.getSubscriber();
             this.publisher = this.bus.getPublisher();
             this.settingSaveManager = new vPESettingSaveManager(this.bus);
-            // private readonly backend = new Backend(this.bus);
             this.callsign = Subject.create(undefined);
             this.timeToRetry = Subject.create(0);
             this.awaitConnectionRef = FSComponent.createRef();
@@ -20980,7 +20979,6 @@
         }
         update() {
             if (window['IsDestroying'] === true) {
-                console.log("AAAAA DESTROY");
                 return;
             }
             this.gnss.onUpdate();

@@ -54,7 +54,7 @@ export class InputBar extends DisplayComponent<InputBarProps> {
         this.onInputSent()
     }
 
-    public getInputBar() {
+    public getInputBar(): NodeReference<HTMLElement> {
         return this.ref
     }
 

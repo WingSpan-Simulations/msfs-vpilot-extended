@@ -19716,6 +19716,102 @@
         }
     }
 
+    class InputBar extends DisplayComponent {
+        constructor() {
+            super(...arguments);
+            this.ref = FSComponent.createRef();
+        }
+        onAfterRender(node) {
+            this.ref.instance.addEventListener("input", () => this.onInputSent());
+            if (this.props.requireInput) {
+                this.setInputError();
+            }
+        }
+        setInputError(remove) {
+            if (this.ref.instance.classList.contains("error") !== true && remove !== true) {
+                this.ref.instance.classList.add("error");
+            }
+            else if (this.ref.instance.classList.contains("error") === true && remove === true) {
+                this.ref.instance.classList.remove("error");
+            }
+        }
+        onInputSent() {
+            let input = this.ref.instance._valueStr;
+            if (input !== undefined) {
+                if (this.props.transformInput) {
+                    input = this.props.transformInput(input);
+                    this.ref.instance.setValue(input);
+                }
+                if (this.props.onInput) {
+                    this.props.onInput(input, this.ref);
+                }
+                if (this.props.requireInput) {
+                    if (input == "") {
+                        this.setInputError();
+                    }
+                    else {
+                        this.setInputError(true);
+                    }
+                }
+            }
+        }
+        setInputText(input) {
+            this.ref.instance.setValue(input);
+            this.onInputSent();
+        }
+        getInputBar() {
+            return this.ref;
+        }
+        render() {
+            return (FSComponent.buildComponent("ui-input", { ref: this.ref, class: this.props.class, id: this.props.id, type: "text", "no-tooltip": true, "no-key-navigation": true, "not-pad-interactive": true, idevent: "0" }));
+        }
+    }
+
+    class RadioPanel extends DisplayComponent {
+        constructor() {
+            super(...arguments);
+            this.inputBarRef = FSComponent.createRef();
+        }
+        onAfterRender(node) {
+            let inputParent = this.inputBarRef.instance.getInputBar().instance;
+            const checkParentLoaded = new Promise(resolve => {
+                const interval = setInterval(() => {
+                    let inputDiv = inputParent.querySelector(".default-input");
+                    if (inputDiv !== null) {
+                        clearInterval(interval);
+                        resolve(inputDiv);
+                    }
+                });
+            });
+            checkParentLoaded.then((inputDiv) => { inputDiv.style.height = "41px"; });
+        }
+        render() {
+            return (FSComponent.buildComponent("div", null,
+                FSComponent.buildComponent("link", { rel: "import", href: "/templates/uiInput/uiInput.html" }),
+                FSComponent.buildComponent("link", { rel: "import", href: "/templates/InputBar/InputBar.html" }),
+                FSComponent.buildComponent("div", { class: "bg-[var(--backgroundColorContrastedPanel)] p-1 m-2" },
+                    FSComponent.buildComponent("div", { class: "bg-[var(--backgroundColorPanel)] flex items-stretch justify-between", id: "topbar" },
+                        FSComponent.buildComponent("div", { class: "font-bold pl-2 py-1 text-xl" }, "[VPILOT EXTENDER] RADIO"),
+                        FSComponent.buildComponent("icon-button", { class: "Reduce nodrag condensed-interactive m-1", "icon-tooltip": "TT:GAME.PANEL_TOOLTIP_MINIMIZE", "data-url": "/icons/reduce.svg", created: "true", "data-input-group": "ICON-BUTTON", tabindex: "1", guid: "GUID_b7d51b5d-4def-54cf-f4cb-7060e98eac00" })),
+                    FSComponent.buildComponent("div", { class: "pt-2" },
+                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 1"),
+                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 2"),
+                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 3"),
+                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 4"),
+                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 5"),
+                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 6"),
+                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 7"),
+                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 8"),
+                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 9"),
+                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 10")),
+                    FSComponent.buildComponent("div", { class: "grid grid-cols-5 pt-1" },
+                        FSComponent.buildComponent("div", { class: "col-span-4" },
+                            FSComponent.buildComponent(InputBar, { ref: this.inputBarRef, class: "h-auto" })),
+                        FSComponent.buildComponent("div", null,
+                            FSComponent.buildComponent("new-push-button", { class: "w-auto ml-2 text-center", title: "Send" }))))));
+        }
+    }
+
     const checkSimVarLoaded = new Promise(resolve => {
         const interval = setInterval(() => {
             if (window.simvar !== undefined) {
@@ -19888,10 +19984,9 @@
         }
     }
     document.addEventListener("DOMContentLoaded", () => {
-        console.log("AAAA");
         checkSimVarLoaded.then(() => {
-            console.log("BBBB");
             new Backend();
+            FSComponent.render(FSComponent.buildComponent(RadioPanel, null), document.querySelector("body"));
         });
     });
 

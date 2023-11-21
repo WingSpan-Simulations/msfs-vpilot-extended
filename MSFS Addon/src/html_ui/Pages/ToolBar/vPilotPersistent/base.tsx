@@ -1,10 +1,11 @@
 /// <reference types='@microsoft/msfs-types' />
 
-import { EventBus, EventSubscriber, Publisher } from '@microsoft/msfs-sdk';
+import { EventBus, EventSubscriber, FSComponent, Publisher } from '@microsoft/msfs-sdk';
 
 import {
     AircraftSaveManager, FlightPlanSaveManager, vPESettingSaveManager
 } from '../../../InGamePanels/SettingSaveManager';
+import { RadioPanel } from './RadioPanel';
 import { checkSimVarLoaded } from './Utilites';
 
 const websocketUri = "ws://127.0.0.1:8080/";
@@ -263,9 +264,8 @@ export class Backend {
 
 
 document.addEventListener("DOMContentLoaded", () => {
-    console.log("AAAA")
     checkSimVarLoaded.then(() => {
-        console.log("BBBB")
         new Backend()
+        FSComponent.render(<RadioPanel />, document.querySelector("body"))
     })
 });

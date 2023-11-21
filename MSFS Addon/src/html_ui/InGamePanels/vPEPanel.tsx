@@ -15,8 +15,6 @@ import { vPESettingSaveManager } from './SettingSaveManager';
 import { checkSimVarLoaded } from './Utilites';
 import { BackendEvents, FrontendEvents } from './vPEBackend';
 
-// import { Backend, BackendEvents, FrontendEvents } from './vPEBackend';
-
 type possiblePages = "awaitConnection" | "vatsimConnect" | "flightPlan" | "onlineATC"
 
 class VPEPanel extends DisplayComponent<ComponentProps> {
@@ -26,7 +24,6 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
     private readonly subscriber = this.bus.getSubscriber<BackendEvents>();
     private readonly publisher = this.bus.getPublisher<FrontendEvents>();
     private readonly settingSaveManager = new vPESettingSaveManager(this.bus)
-    // private readonly backend = new Backend(this.bus);
 
     private readonly callsign = Subject.create<string | undefined>(undefined);
     private readonly timeToRetry = Subject.create<number>(0);
@@ -107,7 +104,6 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
 
     private update() {
         if ((window as any)['IsDestroying'] === true) {
-            console.log("AAAAA DESTROY")
             return;
         }
 
