@@ -21058,6 +21058,7 @@
         }
     }
 
+    /// <reference types='@microsoft/msfs-types' />
     class VPEPanel extends DisplayComponent {
         constructor(props) {
             super(props);
@@ -21139,6 +21140,7 @@
         }
         update() {
             if (window['IsDestroying'] === true) {
+                console.log("AAAAA DESTROY");
                 return;
             }
             this.gnss.onUpdate();

@@ -1,3 +1,5 @@
+/// <reference types='@microsoft/msfs-types' />
+
 import {
     ClockPublisher, ComponentProps, DisplayComponent, EventBus, FSComponent, GNSSPublisher,
     NodeReference, Subject, VNode
@@ -109,6 +111,7 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
 
     private update() {
         if ((window as any)['IsDestroying'] === true) {
+            console.log("AAAAA DESTROY")
             return;
         }
 

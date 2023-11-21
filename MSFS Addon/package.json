@@ -6,9 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build:spb": "build --spb",
-    "build:panel": "npx rollup -c panel/rollup.config.mjs",
-    "build:css": "npx tailwindcss -o ./src/html_ui/InGamePanels/vPEPanel/vendor/tailwind.css",
-    "build": "echo Building panels && npm run build:panel && echo Building tailwind css && npm run build:css && echo Building layout.json && layoutBuild.exe src/layout.json"
+    "build:panel": "npx rollup -c rollup.config.mjs",
+    "build:css": "npx tailwindcss -o ./build/html_ui/InGamePanels/vPEPanel/vendor/tailwind.css",
+    "build": "echo Building panels && npm run build:panel && echo Building tailwind css && npm run build:css && echo Building layout.json && layoutBuild.exe build/layout.json"
   },
   "keywords": [],
   "author": "",
