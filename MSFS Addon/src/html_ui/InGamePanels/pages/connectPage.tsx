@@ -149,6 +149,9 @@ export class ConnectPage extends DisplayComponent<ConnectProps> {
     connectToServer() {
         let errors = flatten(Object.values(this.errors.get()));
         if (errors.length == 0) {
+            this.aircraftSetting.getSetting('callsign').set(this.callsign)
+            this.aircraftSetting.getSetting('selcal').set(this.selcal)
+
             this.publisher.pub("connectToNetwork", {
                 callsign: this.callsign,
                 aircraft: this.aircraft,

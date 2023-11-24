@@ -2,6 +2,11 @@ import {
     DefaultUserSettingManager, EventBus, UserSettingRecord, UserSettingSaveManager
 } from '@microsoft/msfs-sdk';
 
+export interface GeneralSettings extends UserSettingRecord {
+    /** The key code which corresponds to the key used for toggling radio visibility */
+    'radioKey': number
+}
+
 export interface AircraftSettings extends UserSettingRecord {
     /** The last callsign used to connect */
     'callsign': string;
@@ -42,6 +47,14 @@ export interface FlightPlanSettings extends UserSettingRecord {
     'isVFR': boolean;
 }
 
+export class GeneralSaveManager extends DefaultUserSettingManager<GeneralSettings> {
+    constructor(bus: EventBus) {
+        super(bus, [
+            { name: 'radioKey', defaultValue: -1 },
+        ])
+    }
+}
+
 export class AircraftSaveManager extends DefaultUserSettingManager<AircraftSettings> {
     constructor(bus: EventBus) {
         super(bus, [
@@ -73,9 +86,11 @@ export class FlightPlanSaveManager extends DefaultUserSettingManager<FlightPlanS
     }
 }
 
+// @ts-ignore
 export class vPESettingSaveManager extends UserSettingSaveManager {
     constructor(bus: EventBus) {
         const settings = [
+            ...new GeneralSaveManager(bus).getAllSettings(),
             ...new AircraftSaveManager(bus).getAllSettings(),
             ...new FlightPlanSaveManager(bus).getAllSettings()
         ]

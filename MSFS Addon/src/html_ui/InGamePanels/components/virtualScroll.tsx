@@ -2,25 +2,26 @@ import { ComponentProps, DisplayComponent, FSComponent, VNode } from '@microsoft
 
 export class VirtualScroll extends DisplayComponent<ComponentProps> {
     static readonly VIEWPORT_HEIGHT_REGEX = /--viewportHeight:\s*([^;]+)/
-    private readonly mainBody = document.querySelector("html")
     private readonly containerRef = FSComponent.createRef<HTMLDivElement>()
     private readonly contentRef = FSComponent.createRef<HTMLDivElement>()
     private readonly scrollbarRef = FSComponent.createRef<HTMLDivElement>()
+
     private viewportHeight = 0;
-    private bounds?: DOMRect;
     private lastScroll = 0;
     private scrollBarSize = 0;
-    private scrollPosition = 0;
-    public scrollAmount = 0;
-
     private maxScroll = 0;
     private initialY = 0;
     private isScrollDragging = false;
+    private bounds?: DOMRect;
 
-    private getViewportHeight() {
-        let cssVariables = this.mainBody?.style.cssText || ''
-        let viewportMatch = cssVariables.match(VirtualScroll.VIEWPORT_HEIGHT_REGEX)
-        this.viewportHeight = viewportMatch ? Number(viewportMatch[1].trim()) : 0;
+    public scrollAmount = 0;
+
+    public getContentContainer() {
+        return this.contentRef.instance
+    }
+
+    public scrollToBottom() {
+        this.scrollAmount = -Infinity
     }
 
     private update() {
@@ -35,6 +36,12 @@ export class VirtualScroll extends DisplayComponent<ComponentProps> {
         this.setScrollBarHeight()
         this.setScrollBarPosition()
         this.setScrollBarVisibility()
+
+        if (!this.scrollingNeeded()) {
+            this.scrollAmount = 0
+        } else if (Math.abs(this.scrollAmount) > this.maxScroll) {
+            this.scrollAmount = -this.maxScroll
+        }
 
         requestAnimationFrame(() => this.update())
     }
@@ -92,6 +99,11 @@ export class VirtualScroll extends DisplayComponent<ComponentProps> {
             if (this.scrollbarRef.instance.style.transform != translateString) {
                 this.scrollbarRef.instance.style.transform = translateString
             }
+
+            let positionString = `${this.bounds.width + 4}px`
+            if (this.scrollbarRef.instance.style.left != positionString) {
+                this.scrollbarRef.instance.style.left = positionString
+            }
         }
     }
 
@@ -123,20 +135,15 @@ export class VirtualScroll extends DisplayComponent<ComponentProps> {
         document.addEventListener('mouseup', (event) => this.handleScrollMouseUp(event))
         document.addEventListener('mousemove', (event) => this.handleMouseMove(event))
 
-        const styleObserver = new MutationObserver(mutations => {
-            let styleMutation = mutations.find((mutation) => mutation.attributeName == 'style')
-            if (styleMutation) {
-                this.getViewportHeight()
-                if (!this.scrollingNeeded()) {
-                    this.scrollAmount = 0
-                } else if (Math.abs(this.scrollAmount) > this.maxScroll) {
-                    this.scrollAmount = -this.maxScroll
-                }
-            }
-        })
-        if (this.mainBody) { styleObserver.observe(this.mainBody, { attributes: true, attributeFilter: ["style"] }) }
-
         this.update()
+    }
+
+    public setViewportHeight(height: number) {
+        this.viewportHeight = height
+
+        if (!this.scrollingNeeded()) {
+            this.scrollAmount = 0
+        }
     }
 
     public render(): VNode | null {
@@ -147,7 +154,7 @@ export class VirtualScroll extends DisplayComponent<ComponentProps> {
                         {this.props.children}
                     </div>
                 </div>
-                <div ref={this.scrollbarRef} class="hover:border-2 border-gray-200" style="width: 8px; height: 48px; background-color: var(--primaryColor); position: absolute; right: 2px; z-index: 10;" id="scrollbar" />
+                <new-push-button ref={this.scrollbarRef} style="width: 8px; height: 48px; background-color: var(--primaryColor); position: absolute; z-index: 100;" id="scrollbar" />
             </div >
         )
     }

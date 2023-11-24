@@ -20032,24 +20032,22 @@
     class VirtualScroll extends DisplayComponent {
         constructor() {
             super(...arguments);
-            this.mainBody = document.querySelector("html");
             this.containerRef = FSComponent.createRef();
             this.contentRef = FSComponent.createRef();
             this.scrollbarRef = FSComponent.createRef();
             this.viewportHeight = 0;
             this.lastScroll = 0;
             this.scrollBarSize = 0;
-            this.scrollPosition = 0;
-            this.scrollAmount = 0;
             this.maxScroll = 0;
             this.initialY = 0;
             this.isScrollDragging = false;
+            this.scrollAmount = 0;
         }
-        getViewportHeight() {
-            var _a;
-            let cssVariables = ((_a = this.mainBody) === null || _a === void 0 ? void 0 : _a.style.cssText) || '';
-            let viewportMatch = cssVariables.match(VirtualScroll.VIEWPORT_HEIGHT_REGEX);
-            this.viewportHeight = viewportMatch ? Number(viewportMatch[1].trim()) : 0;
+        getContentContainer() {
+            return this.contentRef.instance;
+        }
+        scrollToBottom() {
+            this.scrollAmount = -Infinity;
         }
         update() {
             this.bounds = this.containerRef.instance.getBoundingClientRect();
@@ -20061,6 +20059,12 @@
             this.setScrollBarHeight();
             this.setScrollBarPosition();
             this.setScrollBarVisibility();
+            if (!this.scrollingNeeded()) {
+                this.scrollAmount = 0;
+            }
+            else if (Math.abs(this.scrollAmount) > this.maxScroll) {
+                this.scrollAmount = -this.maxScroll;
+            }
             requestAnimationFrame(() => this.update());
         }
         scrollingNeeded() {
@@ -20110,6 +20114,10 @@
                 if (this.scrollbarRef.instance.style.transform != translateString) {
                     this.scrollbarRef.instance.style.transform = translateString;
                 }
+                let positionString = `${this.bounds.width + 4}px`;
+                if (this.scrollbarRef.instance.style.left != positionString) {
+                    this.scrollbarRef.instance.style.left = positionString;
+                }
             }
         }
         handleScrollMouseDown(event) {
@@ -20135,28 +20143,19 @@
             this.scrollbarRef.instance.addEventListener('mousedown', (event) => this.handleScrollMouseDown(event));
             document.addEventListener('mouseup', (event) => this.handleScrollMouseUp(event));
             document.addEventListener('mousemove', (event) => this.handleMouseMove(event));
-            const styleObserver = new MutationObserver(mutations => {
-                let styleMutation = mutations.find((mutation) => mutation.attributeName == 'style');
-                if (styleMutation) {
-                    this.getViewportHeight();
-                    if (!this.scrollingNeeded()) {
-                        this.scrollAmount = 0;
-                    }
-                    else if (Math.abs(this.scrollAmount) > this.maxScroll) {
-                        this.scrollAmount = -this.maxScroll;
-                    }
-                }
-            });
-            if (this.mainBody) {
-                styleObserver.observe(this.mainBody, { attributes: true, attributeFilter: ["style"] });
-            }
             this.update();
+        }
+        setViewportHeight(height) {
+            this.viewportHeight = height;
+            if (!this.scrollingNeeded()) {
+                this.scrollAmount = 0;
+            }
         }
         render() {
             return (FSComponent.buildComponent("div", { id: "container" },
                 FSComponent.buildComponent("div", { id: "content-container", style: "overflow: hidden; float: left; width: calc(100% - 10px);", ref: this.containerRef },
                     FSComponent.buildComponent("div", { id: "content", ref: this.contentRef }, this.props.children)),
-                FSComponent.buildComponent("div", { ref: this.scrollbarRef, class: "hover:border-2 border-gray-200", style: "width: 8px; height: 48px; background-color: var(--primaryColor); position: absolute; right: 2px; z-index: 10;", id: "scrollbar" })));
+                FSComponent.buildComponent("new-push-button", { ref: this.scrollbarRef, style: "width: 8px; height: 48px; background-color: var(--primaryColor); position: absolute; z-index: 100;", id: "scrollbar" })));
         }
     }
     VirtualScroll.VIEWPORT_HEIGHT_REGEX = /--viewportHeight:\s*([^;]+)/;
@@ -20197,6 +20196,7 @@
         }
     }
 
+    const ENTER_KEYCODE = 13;
     class InputBar extends DisplayComponent {
         constructor() {
             super(...arguments);
@@ -20204,6 +20204,7 @@
         }
         onAfterRender(node) {
             this.ref.instance.addEventListener("input", () => this.onInputSent());
+            this.ref.instance.addEventListener("keyup", (event) => this.onKeyDown(event));
             if (this.props.requireInput) {
                 this.setInputError();
             }
@@ -20214,6 +20215,12 @@
             }
             else if (this.ref.instance.classList.contains("error") === true && remove === true) {
                 this.ref.instance.classList.remove("error");
+            }
+        }
+        onKeyDown(event) {
+            // My keyboard is returning the enter key as being 0xFFFF for whatever reason
+            if ((event.keyCode == ENTER_KEYCODE || event.keyCode == 0xFFFFFFFF) && this.props.onEnterKey) {
+                this.props.onEnterKey();
             }
         }
         onInputSent() {
@@ -20248,6 +20255,13 @@
         }
     }
 
+    class GeneralSaveManager extends DefaultUserSettingManager {
+        constructor(bus) {
+            super(bus, [
+                { name: 'radioKey', defaultValue: -1 },
+            ]);
+        }
+    }
     class AircraftSaveManager extends DefaultUserSettingManager {
         constructor(bus) {
             super(bus, [
@@ -20277,9 +20291,11 @@
             ]);
         }
     }
+    // @ts-ignore
     class vPESettingSaveManager extends UserSettingSaveManager {
         constructor(bus) {
             const settings = [
+                ...new GeneralSaveManager(bus).getAllSettings(),
                 ...new AircraftSaveManager(bus).getAllSettings(),
                 ...new FlightPlanSaveManager(bus).getAllSettings()
             ];
@@ -20403,6 +20419,8 @@
         connectToServer() {
             let errors = flatten(Object.values(this.errors.get()));
             if (errors.length == 0) {
+                this.aircraftSetting.getSetting('callsign').set(this.callsign);
+                this.aircraftSetting.getSetting('selcal').set(this.selcal);
                 this.publisher.pub("connectToNetwork", {
                     callsign: this.callsign,
                     aircraft: this.aircraft,
@@ -20620,6 +20638,20 @@
                     equipment: this.equipment,
                     isVFR: this.selectedFlightRules == "visual"
                 }, true);
+                this.flightPlanSetting.getSetting('departureAirport').set(this.departureICAO);
+                this.flightPlanSetting.getSetting('arrivalAirport').set(this.arrivalICAO);
+                this.flightPlanSetting.getSetting('alternateAirport').set(this.alternateICAO);
+                this.flightPlanSetting.getSetting('departureTime').set(this.departureTime);
+                this.flightPlanSetting.getSetting('equipmentSuffix').set(this.equipment);
+                this.flightPlanSetting.getSetting('hoursEnroute').set(this.timeEnroute.hours);
+                this.flightPlanSetting.getSetting('minsEnroute').set(this.timeEnroute.minutes);
+                this.flightPlanSetting.getSetting('hoursFuel').set(this.fuelAvailable.hours);
+                this.flightPlanSetting.getSetting('minsFuel').set(this.fuelAvailable.minutes);
+                this.flightPlanSetting.getSetting('cruiseSpeed').set(this.cruiseSpeed);
+                this.flightPlanSetting.getSetting('cruiseAltitude').set(this.cruiseAlt);
+                this.flightPlanSetting.getSetting('route').set(this.route);
+                this.flightPlanSetting.getSetting('remarks').set(this.remarks);
+                this.flightPlanSetting.getSetting('isVFR').set(this.selectedFlightRules == "visual");
             });
             this.fetchButtonRef.instance.addEventListener("click", () => {
                 this.publisher.pub("fetchFlightPlan", true, true);
@@ -20627,7 +20659,6 @@
             this.subscriber.on('flightPlanReceived').handle((flightPlan) => this.setInputs(flightPlan));
         }
         getVoiceRemark() {
-            console.log(this.selectedVoice);
             switch (this.selectedVoice) {
                 case "send + receive":
                     return "/V/";
@@ -20657,13 +20688,13 @@
         onEquipmentInput(input) { this.equipment = input; }
         onTimeEnrouteInput(input) {
             let time = input.split(":");
-            this.timeEnroute.hours = Number(time[0]);
-            this.timeEnroute.minutes = Number(time[1]);
+            this.timeEnroute.hours = Number(time[0] || 0);
+            this.timeEnroute.minutes = Number(time[1] || 0);
         }
         onFuelAvailableInput(input) {
             let time = input.split(":");
-            this.timeEnroute.hours = Number(time[0]);
-            this.timeEnroute.minutes = Number(time[1]);
+            this.timeEnroute.hours = Number(time[0] || 0);
+            this.timeEnroute.minutes = Number(time[1] || 0);
         }
         transformDepartureTimeInput(input) {
             let newInput = input.slice(0, departTimeMaxLength);
@@ -20704,7 +20735,7 @@
             if (flightPlan.departureTime > 0) {
                 this.departureTimeInputRef.instance.setInputText(flightPlan.departureTime.toString());
             }
-            this.equipmentInputRef.instance.setInputText(flightPlan.equipment);
+            this.equipmentInputRef.instance.setInputText(flightPlan.equipment.slice(-1));
             if (flightPlan.minsEnroute > 0 || flightPlan.hoursEnroute > 0) {
                 this.enrouteTimeInputRef.instance.setInputText(`${flightPlan.hoursEnroute.toString().padStart(2, '0')}:${flightPlan.minsEnroute.toString().padStart(2, '0')}`);
             }
@@ -20722,53 +20753,52 @@
         }
         render() {
             return (FSComponent.buildComponent("div", { class: "hidden pb-2", ref: this.pageRef },
-                FSComponent.buildComponent("virtual-scroll", { direction: "y", "scroll-type": "auto" },
-                    FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Flight Rules"),
-                    FSComponent.buildComponent(ScrollButton, { ref: this.flightRulesInputRef, onClick: this.onFlightRuleInput.bind(this), class: "pt-1", choices: ["instrument", "visual"] }),
-                    FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Voice"),
-                    FSComponent.buildComponent(ScrollButton, { ref: this.voiceInputRef, onClick: this.onVoiceInput.bind(this), class: "pt-1", choices: ["send + receive", "receive only", "text only"] }),
-                    FSComponent.buildComponent("div", { class: "grid grid-cols-3 pt-1" },
-                        FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Departure"),
-                        FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Arrival"),
-                        FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Alternate")),
-                    FSComponent.buildComponent("div", { class: "grid grid-cols-3" },
-                        FSComponent.buildComponent(InputBar, { ref: this.departureInputRef, requireInput: true, onInput: this.onDepartureInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" }),
-                        FSComponent.buildComponent(InputBar, { ref: this.arrivalInputRef, onInput: this.onArrivalInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" }),
-                        FSComponent.buildComponent(InputBar, { ref: this.alternateInputRef, onInput: this.onAlternateInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" })),
-                    FSComponent.buildComponent("div", { class: "grid grid-cols-2 pt-1" },
-                        FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Departure Time"),
-                        FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Equipment Suffix")),
-                    FSComponent.buildComponent("div", { class: "grid grid-cols-2" },
-                        FSComponent.buildComponent("div", { class: "flex" },
-                            FSComponent.buildComponent("div", { class: "grid grid-cols-3" },
-                                FSComponent.buildComponent(InputBar, { ref: this.departureTimeInputRef, requireInput: true, onInput: this.onDepartureTimeInput.bind(this), transformInput: this.transformDepartureTimeInput, class: "px-1 col-span-2" }),
-                                FSComponent.buildComponent("p", { class: "px-1 m-auto col-span-1" }, "hhmm zulu"))),
-                        FSComponent.buildComponent("div", { class: "flex" },
-                            FSComponent.buildComponent(InputBar, { ref: this.equipmentInputRef, onInput: this.onEquipmentInput.bind(this), transformInput: this.transformText.bind(this, 1, alphabetRegex), class: "px-1" }))),
-                    FSComponent.buildComponent("div", { class: "grid grid-cols-2 pt-1" },
-                        FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Time Enroute"),
-                        FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Fuel Available")),
-                    FSComponent.buildComponent("div", { class: "grid grid-cols-2" },
-                        FSComponent.buildComponent("div", { class: "flex" },
-                            FSComponent.buildComponent(InputBar, { ref: this.enrouteTimeInputRef, onInput: this.onTimeEnrouteInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, timeSplitRegex), class: "px-1" }),
-                            FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "hh:mm")),
-                        FSComponent.buildComponent("div", { class: "flex" },
-                            FSComponent.buildComponent(InputBar, { ref: this.fuelAvailableInputRef, onInput: this.onFuelAvailableInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, timeSplitRegex), class: "px-1" }),
-                            FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "hh:mm"))),
-                    FSComponent.buildComponent("div", { class: "grid grid-cols-2 pt-1" },
-                        FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Cruise Speed"),
-                        FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Cruise Alt")),
-                    FSComponent.buildComponent("div", { class: "grid grid-cols-2" },
-                        FSComponent.buildComponent("div", { class: "flex" },
-                            FSComponent.buildComponent(InputBar, { ref: this.cruiseSpeedInputRef, requireInput: true, onInput: this.onCruiseSpeedInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, numericRegex), class: "px-1" }),
-                            FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "TAS")),
-                        FSComponent.buildComponent("div", { class: "flex" },
-                            FSComponent.buildComponent(InputBar, { ref: this.cruiseAltitudeInputRef, requireInput: true, onInput: this.onCruiseAltitudeInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, numericRegex), class: "px-1" }),
-                            FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "ft"))),
-                    FSComponent.buildComponent("p", { class: "font-semibold pt-1 px-1" }, "Route"),
-                    FSComponent.buildComponent(InputBox, { ref: this.routeInputRef, onInput: this.onRouteInput.bind(this), transformInput: (input) => { return input.toUpperCase(); }, class: "mx-1" }),
-                    FSComponent.buildComponent("p", { class: "font-semibold pt-1 px-1" }, "Remarks"),
-                    FSComponent.buildComponent(InputBox, { ref: this.remarksInputRef, onInput: this.onRemarksInput.bind(this), transformInput: (input) => { return input.toUpperCase(); }, class: "mx-1" })),
+                FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Flight Rules"),
+                FSComponent.buildComponent(ScrollButton, { ref: this.flightRulesInputRef, onClick: this.onFlightRuleInput.bind(this), class: "pt-1", choices: ["instrument", "visual"] }),
+                FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Voice"),
+                FSComponent.buildComponent(ScrollButton, { ref: this.voiceInputRef, onClick: this.onVoiceInput.bind(this), class: "pt-1", choices: ["send + receive", "receive only", "text only"] }),
+                FSComponent.buildComponent("div", { class: "grid grid-cols-3 pt-1" },
+                    FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Departure"),
+                    FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Arrival"),
+                    FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Alternate")),
+                FSComponent.buildComponent("div", { class: "grid grid-cols-3" },
+                    FSComponent.buildComponent(InputBar, { ref: this.departureInputRef, requireInput: true, onInput: this.onDepartureInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" }),
+                    FSComponent.buildComponent(InputBar, { ref: this.arrivalInputRef, onInput: this.onArrivalInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" }),
+                    FSComponent.buildComponent(InputBar, { ref: this.alternateInputRef, onInput: this.onAlternateInput.bind(this), transformInput: this.transformText.bind(this, ICAOMaxLength, alphanumericRegex), class: "col-span-1 px-1" })),
+                FSComponent.buildComponent("div", { class: "grid grid-cols-2 pt-1" },
+                    FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Departure Time"),
+                    FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Equipment Suffix")),
+                FSComponent.buildComponent("div", { class: "grid grid-cols-2" },
+                    FSComponent.buildComponent("div", { class: "flex" },
+                        FSComponent.buildComponent("div", { class: "grid grid-cols-3" },
+                            FSComponent.buildComponent(InputBar, { ref: this.departureTimeInputRef, requireInput: true, onInput: this.onDepartureTimeInput.bind(this), transformInput: this.transformDepartureTimeInput, class: "px-1 col-span-2" }),
+                            FSComponent.buildComponent("p", { class: "px-1 m-auto col-span-1" }, "hhmm zulu"))),
+                    FSComponent.buildComponent("div", { class: "flex" },
+                        FSComponent.buildComponent(InputBar, { ref: this.equipmentInputRef, onInput: this.onEquipmentInput.bind(this), transformInput: this.transformText.bind(this, 1, alphabetRegex), class: "px-1" }))),
+                FSComponent.buildComponent("div", { class: "grid grid-cols-2 pt-1" },
+                    FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Time Enroute"),
+                    FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Fuel Available")),
+                FSComponent.buildComponent("div", { class: "grid grid-cols-2" },
+                    FSComponent.buildComponent("div", { class: "flex" },
+                        FSComponent.buildComponent(InputBar, { ref: this.enrouteTimeInputRef, onInput: this.onTimeEnrouteInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, timeSplitRegex), class: "px-1" }),
+                        FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "hh:mm")),
+                    FSComponent.buildComponent("div", { class: "flex" },
+                        FSComponent.buildComponent(InputBar, { ref: this.fuelAvailableInputRef, onInput: this.onFuelAvailableInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, timeSplitRegex), class: "px-1" }),
+                        FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "hh:mm"))),
+                FSComponent.buildComponent("div", { class: "grid grid-cols-2 pt-1" },
+                    FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Cruise Speed"),
+                    FSComponent.buildComponent("p", { class: "col-span-1 font-semibold px-1" }, "Cruise Alt")),
+                FSComponent.buildComponent("div", { class: "grid grid-cols-2" },
+                    FSComponent.buildComponent("div", { class: "flex" },
+                        FSComponent.buildComponent(InputBar, { ref: this.cruiseSpeedInputRef, requireInput: true, onInput: this.onCruiseSpeedInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, numericRegex), class: "px-1" }),
+                        FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "TAS")),
+                    FSComponent.buildComponent("div", { class: "flex" },
+                        FSComponent.buildComponent(InputBar, { ref: this.cruiseAltitudeInputRef, requireInput: true, onInput: this.onCruiseAltitudeInput.bind(this), transformInput: this.transformText.bind(this, timeSplitMaxLength, numericRegex), class: "px-1" }),
+                        FSComponent.buildComponent("p", { class: "px-1 m-auto" }, "ft"))),
+                FSComponent.buildComponent("p", { class: "font-semibold pt-1 px-1" }, "Route"),
+                FSComponent.buildComponent(InputBox, { ref: this.routeInputRef, onInput: this.onRouteInput.bind(this), transformInput: (input) => { return input.toUpperCase(); }, class: "mx-1" }),
+                FSComponent.buildComponent("p", { class: "font-semibold pt-1 px-1" }, "Remarks"),
+                FSComponent.buildComponent(InputBox, { ref: this.remarksInputRef, onInput: this.onRemarksInput.bind(this), transformInput: (input) => { return input.toUpperCase(); }, class: "mx-1" }),
                 FSComponent.buildComponent("new-push-button", { ref: this.fileButtonRef, class: "w-auto mt-2 mx-2 text-center", title: "File" }),
                 FSComponent.buildComponent("new-push-button", { ref: this.fetchButtonRef, class: "w-auto mt-2 mx-2 text-center", title: "Fetch from server" })));
         }
@@ -20903,6 +20933,199 @@
         }
     }
 
+    function keyCodeToString(keyCode) {
+        // Handle special keys
+        switch (keyCode) {
+            case 8:
+                return "Backspace";
+            case 9:
+                return "Tab";
+            case 13:
+                return "Enter";
+            case 16:
+                return "Shift";
+            case 17:
+                return "Ctrl";
+            case 18:
+                return "Alt";
+            case 19:
+                return "Pause/Break";
+            case 20:
+                return "Caps Lock";
+            case 27:
+                return "Esc";
+            case 32:
+                return "Space";
+            case 33:
+                return "Page Up";
+            case 34:
+                return "Page Down";
+            case 35:
+                return "End";
+            case 36:
+                return "Home";
+            case 37:
+                return "Left Arrow";
+            case 38:
+                return "Up Arrow";
+            case 39:
+                return "Right Arrow";
+            case 40:
+                return "Down Arrow";
+            case 45:
+                return "Insert";
+            case 46:
+                return "Delete";
+            case 91:
+                return "Left Window Key";
+            case 92:
+                return "Right Window Key";
+            case 93:
+                return "Select Key";
+            case 96:
+                return "Numpad 0";
+            case 97:
+                return "Numpad 1";
+            case 98:
+                return "Numpad 2";
+            case 99:
+                return "Numpad 3";
+            case 100:
+                return "Numpad 4";
+            case 101:
+                return "Numpad 5";
+            case 102:
+                return "Numpad 6";
+            case 103:
+                return "Numpad 7";
+            case 104:
+                return "Numpad 8";
+            case 105:
+                return "Numpad 9";
+            case 106:
+                return "Numpad *";
+            case 107:
+                return "Numpad +";
+            case 109:
+                return "Numpad -";
+            case 110:
+                return "Numpad .";
+            case 111:
+                return "Numpad /";
+            case 112:
+                return "F1";
+            case 113:
+                return "F2";
+            case 114:
+                return "F3";
+            case 115:
+                return "F4";
+            case 116:
+                return "F5";
+            case 117:
+                return "F6";
+            case 118:
+                return "F7";
+            case 119:
+                return "F8";
+            case 120:
+                return "F9";
+            case 121:
+                return "F10";
+            case 122:
+                return "F11";
+            case 123:
+                return "F12";
+            case 144:
+                return "Num Lock";
+            case 145:
+                return "Scroll Lock";
+            case 188:
+                return ",";
+            case 190:
+                return ".";
+            case 191:
+                return "/";
+            case 192:
+                return "`";
+            case 219:
+                return "[";
+            case 220:
+                return "\\";
+            case 221:
+                return "]";
+            case 222:
+                return "'";
+            case 223:
+                return "`";
+            default:
+                // Convert the key code to a string for printable characters
+                return String.fromCharCode(keyCode);
+        }
+    }
+    class Settings extends DisplayComponent {
+        constructor(props) {
+            super(props);
+            this.frontendPublisher = this.props.bus.getPublisher();
+            this.generalSettings = new GeneralSaveManager(this.props.bus);
+            this.pageRef = FSComponent.createRef();
+            this.buttonRef = FSComponent.createRef();
+            this.buttonText = Subject.create("Click to select key");
+            this.isButtonHighlighted = true;
+        }
+        hide() {
+            this.pageRef.instance.classList.add('hidden');
+        }
+        show() {
+            if (this.pageRef.instance.classList.contains('hidden')) {
+                this.pageRef.instance.classList.remove('hidden');
+            }
+        }
+        setButtonProperties(highlighted) {
+            this.isButtonHighlighted = highlighted;
+            this.buttonRef.instance.style.backgroundColor = this.isButtonHighlighted ? `rgb(170, 170, 170)` : '';
+            let buttonText = this.isButtonHighlighted ? 'Select input'
+                : this.selectedKey ? keyCodeToString(this.selectedKey)
+                    : 'Click to select key';
+            this.buttonText.set(buttonText);
+        }
+        setKeyFromSettings() {
+            this.selectedKey = this.generalSettings.getSetting('radioKey').get();
+            if (this.selectedKey < 0) {
+                this.selectedKey = undefined;
+            }
+            else {
+                this.frontendPublisher.pub('setRadioKey', this.selectedKey, true);
+            }
+            this.setButtonProperties(false);
+        }
+        onAfterRender(node) {
+            this.buttonRef.instance.addEventListener('mousedown', () => {
+                this.setButtonProperties(!this.isButtonHighlighted);
+            });
+            document.addEventListener('keydown', (event) => {
+                if (this.isButtonHighlighted) {
+                    this.selectedKey = event.keyCode;
+                    this.setButtonProperties(false);
+                    this.frontendPublisher.pub('setRadioKey', event.keyCode, true);
+                    this.generalSettings.getSetting('radioKey').set(event.keyCode);
+                }
+            });
+            this.setKeyFromSettings();
+        }
+        render() {
+            return (FSComponent.buildComponent("div", { class: "hidden pb-2", ref: this.pageRef },
+                FSComponent.buildComponent("div", { class: "w-100 h-auto px-2 py-1 rounded-md mx-4 mt-1 mb-3", style: "background-color: rgba(245, 188, 11, 0.7)" },
+                    FSComponent.buildComponent("span", { class: "text-base font-bold" }, "Warning:"),
+                    FSComponent.buildComponent("div", { class: "pl-2 flex flex-col" },
+                        FSComponent.buildComponent("span", { class: "text-base" }, "Ensure that the key chosen does not conflict with any existing controls"))),
+                FSComponent.buildComponent("p", { class: "font-semibold px-1" }, "Radio View Toggle"),
+                FSComponent.buildComponent("div", { class: "pt-2 pl-1 pr-2" },
+                    FSComponent.buildComponent("button", { ref: this.buttonRef, class: "default-input w-[100%] h-[40px] outline hover:outline-gray-100 hover:outline-4" },
+                        FSComponent.buildComponent("strong", { class: "pl-2" }, this.buttonText)))));
+        }
+    }
+
     /// <reference types='@microsoft/msfs-types' />
     class VPEPanel extends DisplayComponent {
         constructor(props) {
@@ -20913,6 +21136,7 @@
             this.subscriber = this.bus.getSubscriber();
             this.publisher = this.bus.getPublisher();
             this.settingSaveManager = new vPESettingSaveManager(this.bus);
+            this.mainBody = document.querySelector("html");
             this.callsign = Subject.create(undefined);
             this.timeToRetry = Subject.create(0);
             this.awaitConnectionRef = FSComponent.createRef();
@@ -20922,18 +21146,35 @@
             this.vatsimConnectRef = FSComponent.createRef();
             this.disconnectRef = FSComponent.createRef();
             this.scrollRef = FSComponent.createRef();
+            this.settingsRef = FSComponent.createRef();
             this.connection = false;
+            checkSimVarLoaded.then(() => {
+                const key = `${SimVar.GetSimVarValue('ATC MODEL', 'string')}.dev_profile_1`;
+                this.settingSaveManager.load(key);
+                this.settingSaveManager.startAutoSave(key);
+            });
         }
         onAfterRender(node) {
+            checkSimVarLoaded.then(() => {
+                this.gnss.startPublish();
+                this.clock.startPublish();
+                this.update();
+            });
             this.subscriber.on("establishedConnection").handle(value => this.websocketConnectionStateChanged(value));
             this.subscriber.on("timeToRetry").handle(value => { this.timeToRetry.set(value); });
             this.subscriber.on("networkCallsign").handle(value => this.vatsimConnectionStateChanged(value));
             this.disconnectRef.instance.addEventListener("click", () => {
                 this.publisher.pub("disconnectFromNetwork", true, true);
             });
-            this.gnss.startPublish();
-            this.clock.startPublish();
-            this.update();
+            const styleObserver = new MutationObserver(mutations => {
+                let styleMutation = mutations.find((mutation) => mutation.attributeName == 'style');
+                if (styleMutation) {
+                    this.getViewportHeight();
+                }
+            });
+            if (this.mainBody) {
+                styleObserver.observe(this.mainBody, { attributes: true, attributeFilter: ["style"] });
+            }
         }
         vatsimConnectionStateChanged(callsign) {
             let connected = callsign !== undefined && callsign !== '';
@@ -20944,7 +21185,7 @@
                 }
             }
             else {
-                this.showPage("vatsimConnect");
+                this.websocketConnectionStateChanged(this.connection);
                 if (this.headerRef.instance.classList.contains("hidden") !== true) {
                     this.headerRef.instance.classList.add("hidden");
                 }
@@ -20957,6 +21198,7 @@
                 ["awaitConnection"]: this.awaitConnectionRef,
                 ["flightPlan"]: this.flightPlanRef,
                 ["onlineATC"]: this.onlineATCRef,
+                ["settings"]: this.settingsRef
             };
             Object.entries(pagesToRefs).forEach(([refName, ref]) => {
                 if (page !== undefined && refName == page) {
@@ -20977,8 +21219,22 @@
                 this.showPage("awaitConnection");
             }
         }
+        getViewportHeight() {
+            var _a;
+            let cssVariables = ((_a = this.mainBody) === null || _a === void 0 ? void 0 : _a.style.cssText) || '';
+            let viewportMatch = cssVariables.match(VirtualScroll.VIEWPORT_HEIGHT_REGEX);
+            this.scrollRef.instance.setViewportHeight(viewportMatch ? Number(viewportMatch[1].trim()) : 0);
+        }
         update() {
-            if (window['IsDestroying'] === true) {
+            // Only way to check if sim is destroying
+            if (SimVar.GetSimVarValue("E:ABSOLUTE TIME", "seconds") == null) {
+                const key = `${SimVar.GetSimVarValue('ATC MODEL', 'string')}.dev_profile_1`;
+                this.settingSaveManager.save(key);
+                this.gnss.stopPublish();
+                this.clock.stopPublish();
+                if (document.activeElement && document.activeElement.blur) {
+                    document.activeElement.blur();
+                }
                 return;
             }
             this.gnss.onUpdate();
@@ -20989,7 +21245,7 @@
             return (FSComponent.buildComponent("ingamepanel-custom", null,
                 FSComponent.buildComponent("ingame-ui", { id: "vPE_Frame", "panel-id": "PANEL_VPILOT_EXTENDER", class: "ingameUiFrame panelInvisible", title: "vPE", "min-width": "40", "min-height": "40" },
                     FSComponent.buildComponent("div", { id: "header", ref: this.headerRef, class: "mx-1 pb-2 hidden" },
-                        FSComponent.buildComponent(ButtonGroup, { buttons: ["Flight Plan", "Online ATC"], onInput: (input) => {
+                        FSComponent.buildComponent(ButtonGroup, { buttons: ["Flight Plan", "Online ATC", "Settings"], onInput: (input) => {
                                 if (this.callsign.get() !== undefined) {
                                     switch (input) {
                                         case "Flight Plan":
@@ -20997,6 +21253,9 @@
                                             break;
                                         case "Online ATC":
                                             this.showPage("onlineATC");
+                                            break;
+                                        case "Settings":
+                                            this.showPage("settings");
                                             break;
                                     }
                                 }
@@ -21010,7 +21269,8 @@
                         FSComponent.buildComponent(AwaitingConnection, { ref: this.awaitConnectionRef, timeToRetry: this.timeToRetry }),
                         FSComponent.buildComponent(FlightPlanPage, { ref: this.flightPlanRef, bus: this.bus }),
                         FSComponent.buildComponent(ConnectPage, { ref: this.vatsimConnectRef, bus: this.bus }),
-                        FSComponent.buildComponent(OnlineATC, { ref: this.onlineATCRef, bus: this.bus })),
+                        FSComponent.buildComponent(OnlineATC, { ref: this.onlineATCRef, bus: this.bus }),
+                        FSComponent.buildComponent(Settings, { ref: this.settingsRef, bus: this.bus })),
                     FSComponent.buildComponent("div", { class: "condensedPanel", id: "footer" }))));
         }
     }

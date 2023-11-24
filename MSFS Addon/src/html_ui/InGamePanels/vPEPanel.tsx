@@ -11,11 +11,12 @@ import { AwaitingConnection } from './pages/awaitingConnection';
 import { ConnectPage } from './pages/connectPage';
 import { FlightPlanPage } from './pages/flightPlan';
 import { OnlineATC } from './pages/onlineATC';
+import { Settings } from './pages/settings';
 import { vPESettingSaveManager } from './SettingSaveManager';
 import { checkSimVarLoaded } from './Utilites';
 import { BackendEvents, FrontendEvents } from './vPEBackend';
 
-type possiblePages = "awaitConnection" | "vatsimConnect" | "flightPlan" | "onlineATC"
+type possiblePages = "awaitConnection" | "vatsimConnect" | "flightPlan" | "onlineATC" | "settings"
 
 class VPEPanel extends DisplayComponent<ComponentProps> {
     private readonly bus = new EventBus();
@@ -25,6 +26,7 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
     private readonly publisher = this.bus.getPublisher<FrontendEvents>();
     private readonly settingSaveManager = new vPESettingSaveManager(this.bus)
 
+    private readonly mainBody = document.querySelector("html")
     private readonly callsign = Subject.create<string | undefined>(undefined);
     private readonly timeToRetry = Subject.create<number>(0);
     private readonly awaitConnectionRef = FSComponent.createRef<AwaitingConnection>();
@@ -34,14 +36,28 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
     private readonly vatsimConnectRef = FSComponent.createRef<ConnectPage>();
     private readonly disconnectRef = FSComponent.createRef<HTMLElement>();
     private readonly scrollRef = FSComponent.createRef<VirtualScroll>();
+    private readonly settingsRef = FSComponent.createRef<Settings>();
 
     private connection = false;
 
     constructor(props: ComponentProps) {
         super(props);
+
+        checkSimVarLoaded.then(() => {
+            const key = `${SimVar.GetSimVarValue('ATC MODEL', 'string')}.dev_profile_1`
+            this.settingSaveManager.load(key)
+            this.settingSaveManager.startAutoSave(key)
+        })
     }
 
     onAfterRender(node: VNode): void {
+        checkSimVarLoaded.then(() => {
+            this.gnss.startPublish();
+            this.clock.startPublish();
+
+            this.update()
+        })
+
         this.subscriber.on("establishedConnection").handle(value => this.websocketConnectionStateChanged(value));
         this.subscriber.on("timeToRetry").handle(value => { this.timeToRetry.set(value) });
         this.subscriber.on("networkCallsign").handle(value => this.vatsimConnectionStateChanged(value))
@@ -49,10 +65,14 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
             this.publisher.pub("disconnectFromNetwork", true, true)
         })
 
-        this.gnss.startPublish();
-        this.clock.startPublish();
+        const styleObserver = new MutationObserver(mutations => {
+            let styleMutation = mutations.find((mutation) => mutation.attributeName == 'style')
+            if (styleMutation) {
+                this.getViewportHeight()
 
-        this.update()
+            }
+        })
+        if (this.mainBody) { styleObserver.observe(this.mainBody, { attributes: true, attributeFilter: ["style"] }) }
     }
 
     vatsimConnectionStateChanged(callsign?: string) {
@@ -64,7 +84,7 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
                 this.headerRef.instance.classList.remove("hidden")
             }
         } else {
-            this.showPage("vatsimConnect")
+            this.websocketConnectionStateChanged(this.connection)
             if (this.headerRef.instance.classList.contains("hidden") !== true) {
                 this.headerRef.instance.classList.add("hidden")
             }
@@ -79,6 +99,7 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
             ["awaitConnection"]: this.awaitConnectionRef,
             ["flightPlan"]: this.flightPlanRef,
             ["onlineATC"]: this.onlineATCRef,
+            ["settings"]: this.settingsRef
         }
 
         Object.entries(pagesToRefs).forEach(([refName, ref]) => {
@@ -102,8 +123,25 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
         }
     }
 
+    private getViewportHeight() {
+        let cssVariables = this.mainBody?.style.cssText || ''
+        let viewportMatch = cssVariables.match(VirtualScroll.VIEWPORT_HEIGHT_REGEX)
+        this.scrollRef.instance.setViewportHeight(viewportMatch ? Number(viewportMatch[1].trim()) : 0);
+    }
+
     private update() {
-        if ((window as any)['IsDestroying'] === true) {
+        // Only way to check if sim is destroying
+        if (SimVar.GetSimVarValue("E:ABSOLUTE TIME", "seconds") == null) {
+            const key = `${SimVar.GetSimVarValue('ATC MODEL', 'string')}.dev_profile_1`
+            this.settingSaveManager.save(key)
+
+            this.gnss.stopPublish()
+            this.clock.stopPublish()
+
+            if (document.activeElement && (document.activeElement as any).blur) {
+                (document.activeElement as any).blur()
+            }
+
             return;
         }
 
@@ -113,7 +151,8 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
         requestAnimationFrame(() => this.update())
     }
 
-    render(): VNode | null {
+
+    public render(): VNode | null {
         return (
             <ingamepanel-custom>
                 <ingame-ui
@@ -125,7 +164,7 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
                     min-height="40"
                 >
                     <div id="header" ref={this.headerRef} class="mx-1 pb-2 hidden">
-                        <ButtonGroup buttons={["Flight Plan", "Online ATC"]} onInput={(input) => {
+                        <ButtonGroup buttons={["Flight Plan", "Online ATC", "Settings"]} onInput={(input) => {
                             if (this.callsign.get() !== undefined) {
                                 switch (input) {
                                     case "Flight Plan":
@@ -133,6 +172,9 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
                                         break;
                                     case "Online ATC":
                                         this.showPage("onlineATC")
+                                        break;
+                                    case "Settings":
+                                        this.showPage("settings")
                                         break;
                                 }
                             }
@@ -153,6 +195,7 @@ class VPEPanel extends DisplayComponent<ComponentProps> {
                         <FlightPlanPage ref={this.flightPlanRef} bus={this.bus} />
                         <ConnectPage ref={this.vatsimConnectRef} bus={this.bus} />
                         <OnlineATC ref={this.onlineATCRef} bus={this.bus} />
+                        <Settings ref={this.settingsRef} bus={this.bus} />
                     </VirtualScroll>
 
                     <div class="condensedPanel" id="footer"></div>

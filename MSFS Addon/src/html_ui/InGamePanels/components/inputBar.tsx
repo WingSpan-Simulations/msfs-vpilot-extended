@@ -7,14 +7,18 @@ interface InputBarProps extends ComponentProps {
     id?: string;
     transformInput?: (input: string) => string;
     onInput?: (input: string, ref: NodeReference<any>) => void;
+    onEnterKey?: () => void;
     requireInput?: boolean
 }
+
+const ENTER_KEYCODE = 13
 
 export class InputBar extends DisplayComponent<InputBarProps> {
     private readonly ref = FSComponent.createRef<any>();
 
     public onAfterRender(node: VNode): void {
         this.ref.instance.addEventListener("input", () => this.onInputSent())
+        this.ref.instance.addEventListener("keyup", (event: KeyboardEvent) => this.onKeyDown(event))
 
         if (this.props.requireInput) {
             this.setInputError()
@@ -26,6 +30,13 @@ export class InputBar extends DisplayComponent<InputBarProps> {
             this.ref.instance.classList.add("error")
         } else if (this.ref.instance.classList.contains("error") === true && remove === true) {
             this.ref.instance.classList.remove("error")
+        }
+    }
+
+    private onKeyDown(event: KeyboardEvent): void {
+        // My keyboard is returning the enter key as being 0xFFFF for whatever reason
+        if ((event.keyCode == ENTER_KEYCODE || event.keyCode == 0xFFFFFFFF) && this.props.onEnterKey) {
+            this.props.onEnterKey()
         }
     }
 

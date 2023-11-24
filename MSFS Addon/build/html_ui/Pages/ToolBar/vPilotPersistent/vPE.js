@@ -19677,6 +19677,13 @@
         }
     }
 
+    class GeneralSaveManager extends DefaultUserSettingManager {
+        constructor(bus) {
+            super(bus, [
+                { name: 'radioKey', defaultValue: -1 },
+            ]);
+        }
+    }
     class AircraftSaveManager extends DefaultUserSettingManager {
         constructor(bus) {
             super(bus, [
@@ -19706,9 +19713,11 @@
             ]);
         }
     }
+    // @ts-ignore
     class vPESettingSaveManager extends UserSettingSaveManager {
         constructor(bus) {
             const settings = [
+                ...new GeneralSaveManager(bus).getAllSettings(),
                 ...new AircraftSaveManager(bus).getAllSettings(),
                 ...new FlightPlanSaveManager(bus).getAllSettings()
             ];
@@ -19716,6 +19725,7 @@
         }
     }
 
+    const ENTER_KEYCODE = 13;
     class InputBar extends DisplayComponent {
         constructor() {
             super(...arguments);
@@ -19723,6 +19733,7 @@
         }
         onAfterRender(node) {
             this.ref.instance.addEventListener("input", () => this.onInputSent());
+            this.ref.instance.addEventListener("keyup", (event) => this.onKeyDown(event));
             if (this.props.requireInput) {
                 this.setInputError();
             }
@@ -19733,6 +19744,12 @@
             }
             else if (this.ref.instance.classList.contains("error") === true && remove === true) {
                 this.ref.instance.classList.remove("error");
+            }
+        }
+        onKeyDown(event) {
+            // My keyboard is returning the enter key as being 0xFFFF for whatever reason
+            if ((event.keyCode == ENTER_KEYCODE || event.keyCode == 0xFFFFFFFF) && this.props.onEnterKey) {
+                this.props.onEnterKey();
             }
         }
         onInputSent() {
@@ -19767,13 +19784,219 @@
         }
     }
 
+    class VirtualScroll extends DisplayComponent {
+        constructor() {
+            super(...arguments);
+            this.containerRef = FSComponent.createRef();
+            this.contentRef = FSComponent.createRef();
+            this.scrollbarRef = FSComponent.createRef();
+            this.viewportHeight = 0;
+            this.lastScroll = 0;
+            this.scrollBarSize = 0;
+            this.maxScroll = 0;
+            this.initialY = 0;
+            this.isScrollDragging = false;
+            this.scrollAmount = 0;
+        }
+        getContentContainer() {
+            return this.contentRef.instance;
+        }
+        scrollToBottom() {
+            this.scrollAmount = -Infinity;
+        }
+        update() {
+            this.bounds = this.containerRef.instance.getBoundingClientRect();
+            this.maxScroll = Math.abs((this.bounds.y + this.bounds.height) - this.viewportHeight);
+            if (this.scrollAmount != this.lastScroll) {
+                this.lastScroll = this.scrollAmount;
+                this.contentRef.instance.style.transform = `translateY(${this.scrollAmount}px)`;
+            }
+            this.setScrollBarHeight();
+            this.setScrollBarPosition();
+            this.setScrollBarVisibility();
+            if (!this.scrollingNeeded()) {
+                this.scrollAmount = 0;
+            }
+            else if (Math.abs(this.scrollAmount) > this.maxScroll) {
+                this.scrollAmount = -this.maxScroll;
+            }
+            requestAnimationFrame(() => this.update());
+        }
+        scrollingNeeded() {
+            if (this.bounds) {
+                let bottomElementPosition = this.bounds.y + this.bounds.height;
+                return bottomElementPosition > this.viewportHeight;
+            }
+            return false;
+        }
+        handleScrollEvent(event) {
+            if (!this.scrollingNeeded()) {
+                this.scrollAmount = 0;
+            }
+            else {
+                this.scrollAmount -= event.deltaY;
+            }
+            if (this.bounds) {
+                this.scrollAmount = Math.min(0, Math.max(this.scrollAmount, -this.maxScroll));
+            }
+        }
+        setScrollBarVisibility() {
+            let scrollVisible = this.scrollingNeeded();
+            if (scrollVisible && this.scrollbarRef.instance.classList.contains("hidden")) {
+                this.scrollbarRef.instance.classList.remove("hidden");
+                this.containerRef.instance.style.width = "calc(100% - 10px)";
+            }
+            else if (!scrollVisible && !this.scrollbarRef.instance.classList.contains("hidden")) {
+                this.scrollbarRef.instance.classList.add("hidden");
+                this.containerRef.instance.style.width = "100%";
+            }
+        }
+        setScrollBarHeight() {
+            if (this.bounds) {
+                let scrollRequired = this.bounds.y + this.bounds.height;
+                let scrollRatio = (this.viewportHeight - this.bounds.y) / scrollRequired;
+                this.scrollBarSize = Math.floor(Math.min(1, scrollRatio) * (this.viewportHeight - this.bounds.y));
+                let heightString = `${this.scrollBarSize}px`;
+                if (this.scrollbarRef.instance.style.height != heightString) {
+                    this.scrollbarRef.instance.style.height = heightString;
+                }
+            }
+        }
+        setScrollBarPosition() {
+            if (this.bounds) {
+                let scrollPercent = Math.abs(this.scrollAmount / this.maxScroll);
+                let translateString = `translateY(${Math.ceil((this.viewportHeight - this.bounds.y - this.scrollBarSize) * scrollPercent)}px)`;
+                if (this.scrollbarRef.instance.style.transform != translateString) {
+                    this.scrollbarRef.instance.style.transform = translateString;
+                }
+                let positionString = `${this.bounds.width + 4}px`;
+                if (this.scrollbarRef.instance.style.left != positionString) {
+                    this.scrollbarRef.instance.style.left = positionString;
+                }
+            }
+        }
+        handleScrollMouseDown(event) {
+            this.isScrollDragging = true;
+            this.initialY = event.clientY;
+            this.scrollbarRef.instance.style.backgroundColor = "rgb(255,255,255)";
+        }
+        handleScrollMouseUp(event) {
+            this.isScrollDragging = false;
+            this.scrollbarRef.instance.style.backgroundColor = "var(--primaryColor)";
+        }
+        handleMouseMove(event) {
+            if (this.isScrollDragging && this.bounds && this.scrollingNeeded()) {
+                let newY = event.clientY - this.initialY;
+                let maxScrollBarPosition = this.viewportHeight - this.bounds.y - this.scrollBarSize;
+                let scrollPercent = Math.max(Math.min(newY / maxScrollBarPosition, 1), 0);
+                this.scrollAmount = -scrollPercent * this.maxScroll;
+            }
+        }
+        onAfterRender(node) {
+            this.bounds = this.contentRef.instance.getBoundingClientRect();
+            this.containerRef.instance.addEventListener('wheel', (event) => this.handleScrollEvent(event));
+            this.scrollbarRef.instance.addEventListener('mousedown', (event) => this.handleScrollMouseDown(event));
+            document.addEventListener('mouseup', (event) => this.handleScrollMouseUp(event));
+            document.addEventListener('mousemove', (event) => this.handleMouseMove(event));
+            this.update();
+        }
+        setViewportHeight(height) {
+            this.viewportHeight = height;
+            if (!this.scrollingNeeded()) {
+                this.scrollAmount = 0;
+            }
+        }
+        render() {
+            return (FSComponent.buildComponent("div", { id: "container" },
+                FSComponent.buildComponent("div", { id: "content-container", style: "overflow: hidden; float: left; width: calc(100% - 10px);", ref: this.containerRef },
+                    FSComponent.buildComponent("div", { id: "content", ref: this.contentRef }, this.props.children)),
+                FSComponent.buildComponent("new-push-button", { ref: this.scrollbarRef, style: "width: 8px; height: 48px; background-color: var(--primaryColor); position: absolute; z-index: 100;", id: "scrollbar" })));
+        }
+    }
+    VirtualScroll.VIEWPORT_HEIGHT_REGEX = /--viewportHeight:\s*([^;]+)/;
+
+    class RadioMessage extends DisplayComponent {
+        constructor() {
+            super(...arguments);
+            this.timeStamp = new Date().toUTCString().slice(17, 25);
+            this.message = this.props.message;
+        }
+        determineTextColour() {
+            if (this.props.currentCallsign && this.props.message.includes(this.props.currentCallsign)) {
+                return `rgb(255, 255, 255)`;
+            }
+            else if (this.props.broadcast) {
+                return `rgb(250, 250, 100)`;
+            }
+            else {
+                return `rgb(200,200,200)`;
+            }
+        }
+        onAfterRender() {
+            if (this.props.currentCallsign) {
+                this.message = this.message.replace(this.props.currentCallsign, `<strong>${this.props.currentCallsign}</strong>`);
+            }
+        }
+        render() {
+            return (FSComponent.buildComponent("tr", null,
+                FSComponent.buildComponent("td", { class: "w-[1%] whitespace-nowrap px-2 align-top", style: `color: ${this.determineTextColour()}` },
+                    "[",
+                    FSComponent.buildComponent("span", { class: "font-bold" }, this.props.callsign),
+                    "]"),
+                FSComponent.buildComponent("td", { class: "overflow-hidden align-center", style: `color: ${this.determineTextColour()}` }, this.message),
+                FSComponent.buildComponent("td", { class: "w-[1%] whitespace-nowrap px-2 align-bottom" },
+                    FSComponent.buildComponent("span", { class: "text-sm align-bottom" },
+                        FSComponent.buildComponent("code", { class: "[color:rgb(210,210,210)]" },
+                            this.timeStamp,
+                            "Z")))));
+        }
+    }
+    class RadioSystemMessage extends DisplayComponent {
+        constructor() {
+            super(...arguments);
+            this.timeStamp = new Date().toUTCString().slice(17, 25);
+        }
+        render() {
+            return (FSComponent.buildComponent("tr", null,
+                FSComponent.buildComponent("td", { class: "w-[1%] whitespace-nowrap px-2 align-top" }),
+                FSComponent.buildComponent("td", { class: "overflow-hidden align-center text-center py-2", style: "color: rgb(30,200,250);" },
+                    "FREQUENCY CHANGED TO ",
+                    FSComponent.buildComponent("strong", null,
+                        "1",
+                        this.props.frequency.slice(0, 2),
+                        ".",
+                        this.props.frequency.slice(2))),
+                FSComponent.buildComponent("td", { class: "w-[1%] whitespace-nowrap px-2 align-bottom" },
+                    FSComponent.buildComponent("span", { class: "text-sm align-bottom" },
+                        FSComponent.buildComponent("code", { class: "[color:rgb(210,210,210)]" },
+                            this.timeStamp,
+                            "Z")))));
+        }
+    }
     class RadioPanel extends DisplayComponent {
         constructor() {
             super(...arguments);
+            this.publisher = this.props.bus.getPublisher();
+            this.subscriber = this.props.bus.getSubscriber();
+            this.buttonRef = FSComponent.createRef();
             this.inputBarRef = FSComponent.createRef();
+            this.scrollRef = FSComponent.createRef();
+            this.mainRef = FSComponent.createRef();
+            this.messageContainerRef = FSComponent.createRef();
+            this.currentCallsign = Subject.create(undefined);
+            this.currentMessage = '';
+            this.radioOpen = Subject.create(false);
+        }
+        renderMessage(callsign, message, broadcast, frequencies = ["99999"]) {
+            if (frequencies[0] != this.currentFrequency) {
+                this.currentFrequency = frequencies[0];
+                FSComponent.render(FSComponent.buildComponent(RadioSystemMessage, { frequency: this.currentFrequency }), this.messageContainerRef.instance);
+            }
+            FSComponent.render(FSComponent.buildComponent(RadioMessage, { broadcast: broadcast, callsign: callsign, message: message, frequencies: frequencies, currentCallsign: this.currentCallsign.get() }), this.messageContainerRef.instance);
         }
         onAfterRender(node) {
             let inputParent = this.inputBarRef.instance.getInputBar().instance;
+            this.buttonRef.instance.addEventListener('click', () => this.sendMessage());
             const checkParentLoaded = new Promise(resolve => {
                 const interval = setInterval(() => {
                     let inputDiv = inputParent.querySelector(".default-input");
@@ -19782,33 +20005,71 @@
                         resolve(inputDiv);
                     }
                 });
+                this.subscriber.on('newMessage').handle((message) => this.renderMessage(message.callsign, message.message, message.broadcast, message.frequencies));
+                this.subscriber.on('deleteMessage').handle((message) => {
+                    var _a;
+                    for (let i = this.messageContainerRef.instance.childNodes.length - 1; i >= 0; i--) {
+                        let node = this.messageContainerRef.instance.childNodes[i];
+                        let includesMsg = (_a = node.textContent) === null || _a === void 0 ? void 0 : _a.includes(message);
+                        if (includesMsg) {
+                            node.remove();
+                            return;
+                        }
+                    }
+                });
+                this.subscriber.on('networkCallsign').handle((callsign) => this.currentCallsign.set(callsign));
             });
             checkParentLoaded.then((inputDiv) => { inputDiv.style.height = "41px"; });
+            this.scrollRef.instance.setViewportHeight(this.mainRef.instance.getBoundingClientRect().height - 49);
+            this.radioOpen.sub(open => open ? this.openRadio() : this.closeRadio());
+            const observerConfig = { childList: true };
+            const mutationObserver = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.type === 'childList') {
+                        // Child element added, scroll to bottom
+                        this.scrollRef.instance.scrollToBottom();
+                    }
+                });
+            });
+            mutationObserver.observe(this.messageContainerRef.instance, observerConfig);
+            this.renderMessage('MNHAS', 'TEST 1', false);
+            this.renderMessage('EDDF_FSS_CTR', 'yo', false);
+            this.renderMessage('EZY81RC', 'sup dog', true);
+            this.renderMessage('BAW212', 'joshed it fujagiojogaKLSJFGILKASGFILKAGSLKIFJGJAKLSGFJKLZG\SJFKLGASJLKFHGHAKLSGJFKLASGFKJGAJKLFGJHAKGJFKHGSJHGhjgJKHFJHGVSJHFGAJLSGFKJASHKFJAHSKLFGASKJFHKJSDHGLKDSH;LGJDSAGSDFGDHFGKHDKLJGGhglkgjhgksjkdghksjdhgkjdbkjgbskjgdhks;glsdlkg;ASKJGL;KSDJAGLJSAKL', false);
+        }
+        onTextbarInput(input) {
+            this.currentMessage = input;
+        }
+        sendMessage() {
+            this.renderMessage('BAW212', 'joshed it fujagiojogaKLSJFGILKASGFILKAGSLKIFJGJAKLSGFJKLZG\SJFKLGASJLKFHGHAKLSGJFKLASGFKJGAJKLFGJHAKGJFKHGSJHGhjgJKHFJHGVSJHFGAJLSGFKJASHKFJAHSKLFGASKJFHKJSDHGLKDSH;LGJDSAGSDFGDHFGKHDKLJGGhglkgjhgksjkdghksjdhgkjdbkjgbskjgdhks;glsdlkg;ASKJGL;KSDJAGLJSAKL', false);
+            if (this.currentCallsign.get() && this.currentMessage && this.currentMessage.length > 0) {
+                this.publisher.pub('sendMessage', this.currentMessage);
+            }
+        }
+        openRadio() {
+            this.mainRef.instance.style.transform = `translateY(0px)`;
+            this.mainRef.instance.style.maxHeight = '1000px';
+        }
+        closeRadio() {
+            this.mainRef.instance.style.maxHeight = '52px';
+            this.mainRef.instance.style.transform = `translateY(-350px)`;
         }
         render() {
             return (FSComponent.buildComponent("div", null,
                 FSComponent.buildComponent("link", { rel: "import", href: "/templates/uiInput/uiInput.html" }),
                 FSComponent.buildComponent("link", { rel: "import", href: "/templates/InputBar/InputBar.html" }),
-                FSComponent.buildComponent("div", { class: "bg-[var(--backgroundColorContrastedPanel)] p-1 m-2" },
+                FSComponent.buildComponent("div", { ref: this.mainRef, class: "bg-[var(--backgroundColorContrastedPanel)] p-1 m-2 overflow-hidden", style: "transform: translateY(-350px); max-height: 350px; transition: 0.5s ease-in-out;" },
                     FSComponent.buildComponent("div", { class: "bg-[var(--backgroundColorPanel)] flex items-stretch justify-between", id: "topbar" },
                         FSComponent.buildComponent("div", { class: "font-bold pl-2 py-1 text-xl" }, "[VPILOT EXTENDER] RADIO"),
                         FSComponent.buildComponent("icon-button", { class: "Reduce nodrag condensed-interactive m-1", "icon-tooltip": "TT:GAME.PANEL_TOOLTIP_MINIMIZE", "data-url": "/icons/reduce.svg", created: "true", "data-input-group": "ICON-BUTTON", tabindex: "1", guid: "GUID_b7d51b5d-4def-54cf-f4cb-7060e98eac00" })),
-                    FSComponent.buildComponent("div", { class: "pt-2" },
-                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 1"),
-                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 2"),
-                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 3"),
-                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 4"),
-                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 5"),
-                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 6"),
-                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 7"),
-                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 8"),
-                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 9"),
-                        FSComponent.buildComponent("p", { class: "pl-2 py-1" }, "MESSAGE 10")),
+                    FSComponent.buildComponent("div", { class: "pt-2 pr-[-0.5rem] h-[224px] overflow-hidden" },
+                        FSComponent.buildComponent(VirtualScroll, { ref: this.scrollRef },
+                            FSComponent.buildComponent("table", { class: "w-full min-w-full [word-break:break-all]", ref: this.messageContainerRef }))),
                     FSComponent.buildComponent("div", { class: "grid grid-cols-5 pt-1" },
                         FSComponent.buildComponent("div", { class: "col-span-4" },
-                            FSComponent.buildComponent(InputBar, { ref: this.inputBarRef, class: "h-auto" })),
+                            FSComponent.buildComponent(InputBar, { onInput: this.onTextbarInput.bind(this), onEnterKey: this.sendMessage.bind(this), ref: this.inputBarRef, class: "h-auto" })),
                         FSComponent.buildComponent("div", null,
-                            FSComponent.buildComponent("new-push-button", { class: "w-auto ml-2 text-center", title: "Send" }))))));
+                            FSComponent.buildComponent("new-push-button", { ref: this.buttonRef, class: "w-auto ml-2 text-center", title: "Send" }))))));
         }
     }
 
@@ -19823,21 +20084,48 @@
 
     /// <reference types='@microsoft/msfs-types' />
     const websocketUri = "ws://127.0.0.1:8080/";
+    /* 	INCOMING MESSAGES
+
+    NetworkConnectionEstablished/CallSign:###/TypeCode:###/SelCal:###
+    DisconnectedFromNetwork
+
+    ======================================================================
+        OUTGOING MESSAGES
+    ConnectToNetwork/Callsign:###/TypeCode:###/SelCal:###
+    SendFlightPlan/Departure:####/Arrival:####/Alternate:####/CruiseAlt:#####/CruiseSpeed:####/Route:###/Remarks:###/DepartureTime:####/HoursEnroute:##/MinsEnroute:##/HoursFuel:##/MinsFuel:##/Equipment:#/IsVFR:####/File:true
+    FetchFlightPlan
+    */
     class Backend {
         constructor() {
             this.bus = new EventBus();
-            this.settingSaveManager = new vPESettingSaveManager(this.bus);
-            this.aircraftSetting = new AircraftSaveManager(this.bus);
-            this.flightPlanSetting = new FlightPlanSaveManager(this.bus);
-            this.controllers = new Map([]);
-            this.websocket;
             this.publisher = this.bus.getPublisher();
             this.subscriber = this.bus.getSubscriber();
-            const key = `${SimVar.GetSimVarValue('ATC MODEL', 'string')}.profile_1`;
-            this.settingSaveManager.load(key);
-            this.settingSaveManager.startAutoSave(key);
+            this.settingSaveManager = new vPESettingSaveManager(this.bus);
+            this.generalSettings = new GeneralSaveManager(this.bus);
+            this.radioRef = FSComponent.createRef();
+            this.controllers = new Map([]);
+            this.websocket = new WebSocket(websocketUri);
+            this.awaitingConnection = false;
+            this.timeToRetry = 20;
+            checkSimVarLoaded.then(() => {
+                const key = `${SimVar.GetSimVarValue('ATC MODEL', 'string')}.dev_profile_1`;
+                this.settingSaveManager.load(key);
+                this.settingSaveManager.startAutoSave(key);
+            });
+            FSComponent.render(FSComponent.buildComponent(RadioPanel, { ref: this.radioRef, bus: this.bus }), document.querySelector("body"));
             this.handleFrontEndEvents();
             this.createWebsocket();
+        }
+        getActiveFrequency() {
+            let activeCom = 1;
+            for (let i = 1; i <= 3; i++) {
+                let isActive = SimVar.GetSimVarValue(`A:COM TRANSMIT:${i}`, "bool");
+                activeCom = isActive ? i : activeCom;
+                if (isActive) {
+                    break;
+                }
+            }
+            return SimVar.GetSimVarValue(`A:COM ACTIVE FREQUENCY:${activeCom}`, "Bcd16").toString().slice(1, 6);
         }
         handleFrontEndEvents() {
             this.bus.getSubscriber().on('created').handle((data) => {
@@ -19845,32 +20133,32 @@
             });
             this.subscriber.on("connectToNetwork").handle((values) => {
                 this.websocket.send(`ConnectToNetwork<|>Callsign:${values.callsign}<|>TypeCode:${values.aircraft}<|>SelCal:${values.selcal}`);
-                this.aircraftSetting.getSetting('callsign').set(values.callsign);
-                this.aircraftSetting.getSetting('selcal').set(values.selcal);
             });
             this.subscriber.on("disconnectFromNetwork").handle(() => {
                 this.websocket.send("DisconnectFromNetwork");
             });
             this.subscriber.on("fileFlightPlan").handle((values) => {
-                this.websocket.send(`SendFlightPlan<|>Departure:${values.departure}<|>Arrival:${values.arrival}<|>Alternate:${values.alternate}<|>CruiseAlt:${values.cruiseAlt / 10}<|>CruiseSpeed:${values.cruiseSpeed / 10}<|>Route:${values.route}<|>Remarks:${values.remarks}<|>DepartureTime:${values.departureTime}`);
+                this.websocket.send(`SendFlightPlan<|>Departure:${values.departure}<|>Arrival:${values.arrival}<|>Alternate:${values.alternate}<|>CruiseAlt:${values.cruiseAlt / 100}<|>CruiseSpeed:${values.cruiseSpeed}<|>Route:${values.route}<|>Remarks:${values.remarks}<|>DepartureTime:${values.departureTime}`);
                 this.websocket.send(`SendFlightPlan<|>HoursEnroute:${values.hoursEnroute}<|>MinsEnroute:${values.minsEnroute}<|>HoursFuel:${values.hoursFuel}<|>MinsFuel:${values.minsFuel}<|>EquipmentCode:${values.equipment}<|>IsVFR:${values.isVFR}<|>FilePlan:true`);
-                this.flightPlanSetting.getSetting('departureAirport').set(values.departure);
-                this.flightPlanSetting.getSetting('arrivalAirport').set(values.arrival);
-                this.flightPlanSetting.getSetting('alternateAirport').set(values.alternate);
-                this.flightPlanSetting.getSetting('departureTime').set(values.departureTime);
-                this.flightPlanSetting.getSetting('equipmentSuffix').set(values.equipment);
-                this.flightPlanSetting.getSetting('hoursEnroute').set(values.hoursEnroute);
-                this.flightPlanSetting.getSetting('minsEnroute').set(values.minsEnroute);
-                this.flightPlanSetting.getSetting('hoursFuel').set(values.hoursFuel);
-                this.flightPlanSetting.getSetting('minsFuel').set(values.minsFuel);
-                this.flightPlanSetting.getSetting('cruiseSpeed').set(values.cruiseSpeed);
-                this.flightPlanSetting.getSetting('cruiseAltitude').set(values.cruiseAlt);
-                this.flightPlanSetting.getSetting('route').set(values.route);
-                this.flightPlanSetting.getSetting('remarks').set(values.remarks);
-                this.flightPlanSetting.getSetting('isVFR').set(values.isVFR);
             });
             this.subscriber.on("fetchFlightPlan").handle(() => {
                 this.websocket.send("FetchFlightPlan");
+            });
+            this.subscriber.on('setRadioKey').handle((keyCode) => {
+                this.generalSettings.getSetting('radioKey').set(keyCode);
+            });
+            this.subscriber.on('sendMessage').handle((message) => {
+                let commsOn = SimVar.GetSimVarValue("A:CIRCUIT COM ON", "bool");
+                if (commsOn) {
+                    let frequency = this.getActiveFrequency();
+                    this.websocket.send(`SendRadioMessage<|>Text:${message}`);
+                    this.publisher.pub("newMessage", { callsign: this.callsign || '', message: message, broadcast: false, frequencies: [frequency] });
+                }
+            });
+            document.addEventListener('keydown', (event) => {
+                if (this.generalSettings.getSetting('radioKey').get() == event.keyCode) {
+                    this.radioRef.instance.radioOpen.set(!this.radioRef.instance.radioOpen.get());
+                }
             });
         }
         handleEstablishedConnection(e) {
@@ -19893,13 +20181,14 @@
             console.log(`Type: ${type}, Args: ${JSON.stringify(args)}`);
             switch (type) {
                 case "NetworkConnectionEstablished":
+                    this.callsign = args["CallSign"];
                     this.publisher.pub("networkCallsign", args["CallSign"], true);
                     break;
                 case "DisconnectedFromNetwork":
                     this.publisher.pub("networkCallsign", undefined, true);
                     break;
                 case "FlightPlanReceived":
-                    if (args["Callsign"] == this.aircraftSetting.getSetting('callsign').get()) {
+                    if (args["Callsign"] == this.callsign) {
                         this.publisher.pub("flightPlanReceived", {
                             departure: args["Departure"],
                             arrival: args["Destination"],
@@ -19943,6 +20232,14 @@
                         this.publisher.pub("controllerChange", controllerChange, true);
                     }
                     break;
+                case "RadioMessageReceived":
+                    this.publisher.pub("newMessage", { callsign: args["From"], message: args["Text"], broadcast: false, frequencies: args["Frequencies"].split(",") });
+                    break;
+                case "BroadcastMessageReceived":
+                    this.publisher.pub("newMessage", { callsign: "BROADCAST: " + args["From"], message: args["Text"], broadcast: true });
+                    break;
+                case "RemoveMessage":
+                    this.publisher.pub("deleteMessage", args["Message"]);
             }
         }
         handleError(e) {
@@ -19953,6 +20250,7 @@
                 this.websocket.close();
             }
             this.publisher.pub("establishedConnection", false, true);
+            this.publisher.pub("networkCallsign", undefined, true);
             if (!this.awaitingConnection) {
                 this.awaitingConnection = true;
                 this.timeToRetry = 20;
@@ -19965,6 +20263,7 @@
                     this.publisher.pub("timeToRetry", this.timeToRetry, true);
                     if (this.timeToRetry == 0) {
                         this.timeToRetry = 20;
+                        this.websocket = new WebSocket(websocketUri);
                         this.createWebsocket();
                     }
                 }, 1000);
@@ -19976,7 +20275,6 @@
                 this.connectionInterval = undefined;
             }
             this.awaitingConnection = false;
-            this.websocket = new WebSocket(websocketUri);
             this.websocket.onopen = (e) => this.handleEstablishedConnection(e);
             this.websocket.onclose = (e) => this.handleConnectionClose(e);
             this.websocket.onmessage = (e) => this.handleMessage(e);
@@ -19986,7 +20284,6 @@
     document.addEventListener("DOMContentLoaded", () => {
         checkSimVarLoaded.then(() => {
             new Backend();
-            FSComponent.render(FSComponent.buildComponent(RadioPanel, null), document.querySelector("body"));
         });
     });
 

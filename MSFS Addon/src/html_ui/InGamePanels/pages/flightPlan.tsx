@@ -100,6 +100,21 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
                 equipment: this.equipment,
                 isVFR: this.selectedFlightRules == "visual"
             }, true)
+
+            this.flightPlanSetting.getSetting('departureAirport').set(this.departureICAO)
+            this.flightPlanSetting.getSetting('arrivalAirport').set(this.arrivalICAO)
+            this.flightPlanSetting.getSetting('alternateAirport').set(this.alternateICAO)
+            this.flightPlanSetting.getSetting('departureTime').set(this.departureTime)
+            this.flightPlanSetting.getSetting('equipmentSuffix').set(this.equipment)
+            this.flightPlanSetting.getSetting('hoursEnroute').set(this.timeEnroute.hours)
+            this.flightPlanSetting.getSetting('minsEnroute').set(this.timeEnroute.minutes)
+            this.flightPlanSetting.getSetting('hoursFuel').set(this.fuelAvailable.hours)
+            this.flightPlanSetting.getSetting('minsFuel').set(this.fuelAvailable.minutes)
+            this.flightPlanSetting.getSetting('cruiseSpeed').set(this.cruiseSpeed)
+            this.flightPlanSetting.getSetting('cruiseAltitude').set(this.cruiseAlt)
+            this.flightPlanSetting.getSetting('route').set(this.route)
+            this.flightPlanSetting.getSetting('remarks').set(this.remarks)
+            this.flightPlanSetting.getSetting('isVFR').set(this.selectedFlightRules == "visual")
         })
 
         this.fetchButtonRef.instance.addEventListener("click", () => {
@@ -110,7 +125,6 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
     }
 
     private getVoiceRemark() {
-        console.log(this.selectedVoice)
         switch (this.selectedVoice) {
             case "send + receive":
                 return "/V/"
@@ -145,13 +159,13 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
 
     private onTimeEnrouteInput(input: string) {
         let time = input.split(":")
-        this.timeEnroute.hours = Number(time[0])
-        this.timeEnroute.minutes = Number(time[1])
+        this.timeEnroute.hours = Number(time[0] || 0)
+        this.timeEnroute.minutes = Number(time[1] || 0)
     }
     private onFuelAvailableInput(input: string) {
         let time = input.split(":")
-        this.timeEnroute.hours = Number(time[0])
-        this.timeEnroute.minutes = Number(time[1])
+        this.timeEnroute.hours = Number(time[0] || 0)
+        this.timeEnroute.minutes = Number(time[1] || 0)
     }
 
     private transformDepartureTimeInput(input: string) {
@@ -195,7 +209,7 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
         this.arrivalInputRef.instance.setInputText(flightPlan.arrival)
         this.alternateInputRef.instance.setInputText(flightPlan.alternate)
         if (flightPlan.departureTime > 0) { this.departureTimeInputRef.instance.setInputText(flightPlan.departureTime.toString()) }
-        this.equipmentInputRef.instance.setInputText(flightPlan.equipment)
+        this.equipmentInputRef.instance.setInputText(flightPlan.equipment.slice(-1))
         if (flightPlan.minsEnroute > 0 || flightPlan.hoursEnroute > 0) { this.enrouteTimeInputRef.instance.setInputText(`${flightPlan.hoursEnroute.toString().padStart(2, '0')}:${flightPlan.minsEnroute.toString().padStart(2, '0')}`) }
         if (flightPlan.minsFuel > 0 || flightPlan.hoursFuel > 0) { this.fuelAvailableInputRef.instance.setInputText(`${flightPlan.hoursFuel.toString().padStart(2, '0')}:${flightPlan.minsFuel.toString().padStart(2, '0')}`) }
         if (flightPlan.cruiseSpeed > 0) { this.cruiseSpeedInputRef.instance.setInputText(flightPlan.cruiseSpeed.toString()) }
@@ -207,75 +221,73 @@ export class FlightPlanPage extends DisplayComponent<FlightPlanProps> {
     public render(): VNode {
         return (
             <div class="hidden pb-2" ref={this.pageRef}>
-                <virtual-scroll direction="y" scroll-type="auto">
-                    <p class="col-span-1 font-semibold px-1">Flight Rules</p>
-                    <ScrollButton ref={this.flightRulesInputRef} onClick={this.onFlightRuleInput.bind(this)} class="pt-1" choices={["instrument", "visual"]} />
+                <p class="col-span-1 font-semibold px-1">Flight Rules</p>
+                <ScrollButton ref={this.flightRulesInputRef} onClick={this.onFlightRuleInput.bind(this)} class="pt-1" choices={["instrument", "visual"]} />
 
-                    <p class="col-span-1 font-semibold px-1">Voice</p>
-                    <ScrollButton ref={this.voiceInputRef} onClick={this.onVoiceInput.bind(this)} class="pt-1" choices={["send + receive", "receive only", "text only"]} />
+                <p class="col-span-1 font-semibold px-1">Voice</p>
+                <ScrollButton ref={this.voiceInputRef} onClick={this.onVoiceInput.bind(this)} class="pt-1" choices={["send + receive", "receive only", "text only"]} />
 
-                    <div class="grid grid-cols-3 pt-1">
-                        <p class="col-span-1 font-semibold px-1">Departure</p>
-                        <p class="col-span-1 font-semibold px-1">Arrival</p>
-                        <p class="col-span-1 font-semibold px-1">Alternate</p>
-                    </div>
-                    <div class="grid grid-cols-3">
-                        <InputBar ref={this.departureInputRef} requireInput={true} onInput={this.onDepartureInput.bind(this)} transformInput={this.transformText.bind(this, ICAOMaxLength, alphanumericRegex)} class="col-span-1 px-1" />
-                        <InputBar ref={this.arrivalInputRef} onInput={this.onArrivalInput.bind(this)} transformInput={this.transformText.bind(this, ICAOMaxLength, alphanumericRegex)} class="col-span-1 px-1" />
-                        <InputBar ref={this.alternateInputRef} onInput={this.onAlternateInput.bind(this)} transformInput={this.transformText.bind(this, ICAOMaxLength, alphanumericRegex)} class="col-span-1 px-1" />
-                    </div>
+                <div class="grid grid-cols-3 pt-1">
+                    <p class="col-span-1 font-semibold px-1">Departure</p>
+                    <p class="col-span-1 font-semibold px-1">Arrival</p>
+                    <p class="col-span-1 font-semibold px-1">Alternate</p>
+                </div>
+                <div class="grid grid-cols-3">
+                    <InputBar ref={this.departureInputRef} requireInput={true} onInput={this.onDepartureInput.bind(this)} transformInput={this.transformText.bind(this, ICAOMaxLength, alphanumericRegex)} class="col-span-1 px-1" />
+                    <InputBar ref={this.arrivalInputRef} onInput={this.onArrivalInput.bind(this)} transformInput={this.transformText.bind(this, ICAOMaxLength, alphanumericRegex)} class="col-span-1 px-1" />
+                    <InputBar ref={this.alternateInputRef} onInput={this.onAlternateInput.bind(this)} transformInput={this.transformText.bind(this, ICAOMaxLength, alphanumericRegex)} class="col-span-1 px-1" />
+                </div>
 
-                    <div class="grid grid-cols-2 pt-1">
-                        <p class="col-span-1 font-semibold px-1">Departure Time</p>
-                        <p class="col-span-1 font-semibold px-1">Equipment Suffix</p>
-                    </div>
-                    <div class="grid grid-cols-2">
-                        <div class="flex">
-                            <div class="grid grid-cols-3">
-                                <InputBar ref={this.departureTimeInputRef} requireInput={true} onInput={this.onDepartureTimeInput.bind(this)} transformInput={this.transformDepartureTimeInput} class="px-1 col-span-2" />
-                                <p class="px-1 m-auto col-span-1">hhmm zulu</p>
-                            </div>
-                        </div>
-                        <div class="flex">
-                            <InputBar ref={this.equipmentInputRef} onInput={this.onEquipmentInput.bind(this)} transformInput={this.transformText.bind(this, 1, alphabetRegex)} class="px-1" />
+                <div class="grid grid-cols-2 pt-1">
+                    <p class="col-span-1 font-semibold px-1">Departure Time</p>
+                    <p class="col-span-1 font-semibold px-1">Equipment Suffix</p>
+                </div>
+                <div class="grid grid-cols-2">
+                    <div class="flex">
+                        <div class="grid grid-cols-3">
+                            <InputBar ref={this.departureTimeInputRef} requireInput={true} onInput={this.onDepartureTimeInput.bind(this)} transformInput={this.transformDepartureTimeInput} class="px-1 col-span-2" />
+                            <p class="px-1 m-auto col-span-1">hhmm zulu</p>
                         </div>
                     </div>
+                    <div class="flex">
+                        <InputBar ref={this.equipmentInputRef} onInput={this.onEquipmentInput.bind(this)} transformInput={this.transformText.bind(this, 1, alphabetRegex)} class="px-1" />
+                    </div>
+                </div>
 
-                    <div class="grid grid-cols-2 pt-1">
-                        <p class="col-span-1 font-semibold px-1">Time Enroute</p>
-                        <p class="col-span-1 font-semibold px-1">Fuel Available</p>
+                <div class="grid grid-cols-2 pt-1">
+                    <p class="col-span-1 font-semibold px-1">Time Enroute</p>
+                    <p class="col-span-1 font-semibold px-1">Fuel Available</p>
+                </div>
+                <div class="grid grid-cols-2">
+                    <div class="flex">
+                        <InputBar ref={this.enrouteTimeInputRef} onInput={this.onTimeEnrouteInput.bind(this)} transformInput={this.transformText.bind(this, timeSplitMaxLength, timeSplitRegex)} class="px-1" />
+                        <p class="px-1 m-auto">hh:mm</p>
                     </div>
-                    <div class="grid grid-cols-2">
-                        <div class="flex">
-                            <InputBar ref={this.enrouteTimeInputRef} onInput={this.onTimeEnrouteInput.bind(this)} transformInput={this.transformText.bind(this, timeSplitMaxLength, timeSplitRegex)} class="px-1" />
-                            <p class="px-1 m-auto">hh:mm</p>
-                        </div>
-                        <div class="flex">
-                            <InputBar ref={this.fuelAvailableInputRef} onInput={this.onFuelAvailableInput.bind(this)} transformInput={this.transformText.bind(this, timeSplitMaxLength, timeSplitRegex)} class="px-1" />
-                            <p class="px-1 m-auto">hh:mm</p>
-                        </div>
+                    <div class="flex">
+                        <InputBar ref={this.fuelAvailableInputRef} onInput={this.onFuelAvailableInput.bind(this)} transformInput={this.transformText.bind(this, timeSplitMaxLength, timeSplitRegex)} class="px-1" />
+                        <p class="px-1 m-auto">hh:mm</p>
                     </div>
+                </div>
 
-                    <div class="grid grid-cols-2 pt-1">
-                        <p class="col-span-1 font-semibold px-1">Cruise Speed</p>
-                        <p class="col-span-1 font-semibold px-1">Cruise Alt</p>
+                <div class="grid grid-cols-2 pt-1">
+                    <p class="col-span-1 font-semibold px-1">Cruise Speed</p>
+                    <p class="col-span-1 font-semibold px-1">Cruise Alt</p>
+                </div>
+                <div class="grid grid-cols-2">
+                    <div class="flex">
+                        <InputBar ref={this.cruiseSpeedInputRef} requireInput={true} onInput={this.onCruiseSpeedInput.bind(this)} transformInput={this.transformText.bind(this, timeSplitMaxLength, numericRegex)} class="px-1" />
+                        <p class="px-1 m-auto">TAS</p>
                     </div>
-                    <div class="grid grid-cols-2">
-                        <div class="flex">
-                            <InputBar ref={this.cruiseSpeedInputRef} requireInput={true} onInput={this.onCruiseSpeedInput.bind(this)} transformInput={this.transformText.bind(this, timeSplitMaxLength, numericRegex)} class="px-1" />
-                            <p class="px-1 m-auto">TAS</p>
-                        </div>
-                        <div class="flex">
-                            <InputBar ref={this.cruiseAltitudeInputRef} requireInput={true} onInput={this.onCruiseAltitudeInput.bind(this)} transformInput={this.transformText.bind(this, timeSplitMaxLength, numericRegex)} class="px-1" />
-                            <p class="px-1 m-auto">ft</p>
-                        </div>
+                    <div class="flex">
+                        <InputBar ref={this.cruiseAltitudeInputRef} requireInput={true} onInput={this.onCruiseAltitudeInput.bind(this)} transformInput={this.transformText.bind(this, timeSplitMaxLength, numericRegex)} class="px-1" />
+                        <p class="px-1 m-auto">ft</p>
                     </div>
+                </div>
 
-                    <p class="font-semibold pt-1 px-1">Route</p>
-                    <InputBox ref={this.routeInputRef} onInput={this.onRouteInput.bind(this)} transformInput={(input) => { return input.toUpperCase() }} class="mx-1" />
-                    <p class="font-semibold pt-1 px-1">Remarks</p>
-                    <InputBox ref={this.remarksInputRef} onInput={this.onRemarksInput.bind(this)} transformInput={(input) => { return input.toUpperCase() }} class="mx-1" />
-                </virtual-scroll>
+                <p class="font-semibold pt-1 px-1">Route</p>
+                <InputBox ref={this.routeInputRef} onInput={this.onRouteInput.bind(this)} transformInput={(input) => { return input.toUpperCase() }} class="mx-1" />
+                <p class="font-semibold pt-1 px-1">Remarks</p>
+                <InputBox ref={this.remarksInputRef} onInput={this.onRemarksInput.bind(this)} transformInput={(input) => { return input.toUpperCase() }} class="mx-1" />
                 <new-push-button ref={this.fileButtonRef} class="w-auto mt-2 mx-2 text-center" title="File" />
                 <new-push-button ref={this.fetchButtonRef} class="w-auto mt-2 mx-2 text-center" title="Fetch from server" />
             </div >

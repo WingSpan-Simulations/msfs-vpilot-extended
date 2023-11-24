@@ -1,11 +1,12 @@
 /// <reference types='@microsoft/msfs-types' />
 
-import { EventBus, EventSubscriber, FSComponent, Publisher } from '@microsoft/msfs-sdk';
+import { EventBus, FSComponent, Publisher } from '@microsoft/msfs-sdk';
 
 import {
-    AircraftSaveManager, FlightPlanSaveManager, vPESettingSaveManager
+    AircraftSaveManager, FlightPlanSaveManager, GeneralSaveManager, vPESettingSaveManager
 } from '../../../InGamePanels/SettingSaveManager';
-import { RadioPanel } from './RadioPanel';
+import { BackendEvents, Controller, FrontendEvents } from '../../../InGamePanels/vPEBackend';
+import { MessageProps, RadioPanel } from './RadioPanel';
 import { checkSimVarLoaded } from './Utilites';
 
 const websocketUri = "ws://127.0.0.1:8080/";
@@ -22,78 +23,43 @@ SendFlightPlan/Departure:####/Arrival:####/Alternate:####/CruiseAlt:#####/Cruise
 FetchFlightPlan
 */
 
-interface NetworkConnect {
-    callsign: string;
-    aircraft: string;
-    selcal: string;
-};
-export interface vPEFlightPlan {
-    departure: string;
-    arrival: string;
-    alternate: string;
-    cruiseAlt: number;
-    cruiseSpeed: number;
-    route: string;
-    remarks: string;
-    departureTime: number;
-    hoursEnroute: number;
-    minsEnroute: number;
-    hoursFuel: number;
-    minsFuel: number;
-    equipment: string;
-    isVFR: boolean;
-}
-export interface Controller {
-    Callsign: string,
-    Frequency: number,
-    Latitude: number,
-    Longitude: number
-}
-
-export interface BackendEvents {
-    establishedConnection: boolean;
-    timeToRetry: number;
-    networkCallsign: string | undefined;
-    flightPlanReceived: vPEFlightPlan;
-    controllerChange: Controller;
-    controllerDelete: string;
-    created: string;
-}
-
-export interface FrontendEvents {
-    connectToNetwork: NetworkConnect;
-    disconnectFromNetwork: boolean;
-    fileFlightPlan: vPEFlightPlan;
-    fetchFlightPlan: boolean;
-}
-
-export interface Backend {
-    publisher: Publisher<BackendEvents>;
-    subscriber: EventSubscriber<FrontendEvents>;
-
-    websocket: WebSocket;
-    awaitingConnection: boolean;
-    connectionInterval: NodeJS.Timer | undefined;
-    timeToRetry: number;
-}
 export class Backend {
     private readonly bus = new EventBus()
-    private readonly settingSaveManager = new vPESettingSaveManager(this.bus)
-    private readonly aircraftSetting = new AircraftSaveManager(this.bus)
-    private readonly flightPlanSetting = new FlightPlanSaveManager(this.bus)
+    private readonly publisher = this.bus.getPublisher<BackendEvents>();
+    private readonly subscriber = this.bus.getSubscriber<FrontendEvents>();
+    private readonly settingSaveManager = new vPESettingSaveManager(this.bus);
+    private readonly generalSettings = new GeneralSaveManager(this.bus)
+    private readonly radioRef = FSComponent.createRef<RadioPanel>();
+
     private readonly controllers = new Map<string, Controller>([])
+    private websocket = new WebSocket(websocketUri);
+    private awaitingConnection = false;
+    private timeToRetry = 20;
+    private callsign?: string;
+    private connectionInterval?: NodeJS.Timer
 
     constructor() {
-        this.websocket;
-        this.publisher = this.bus.getPublisher<BackendEvents>();
-        this.subscriber = this.bus.getSubscriber<FrontendEvents>();
+        checkSimVarLoaded.then(() => {
+            const key = `${SimVar.GetSimVarValue('ATC MODEL', 'string')}.dev_profile_1`
+            this.settingSaveManager.load(key)
+            this.settingSaveManager.startAutoSave(key)
+        })
 
-        const key = `${SimVar.GetSimVarValue('ATC MODEL', 'string')}.profile_1`
-        this.settingSaveManager.load(key)
-        this.settingSaveManager.startAutoSave(key)
+        FSComponent.render(<RadioPanel ref={this.radioRef} bus={this.bus} />, document.querySelector("body"))
 
         this.handleFrontEndEvents()
         this.createWebsocket();
+    }
+
+    private getActiveFrequency(): string {
+        let activeCom = 1
+        for (let i = 1; i <= 3; i++) {
+            let isActive = SimVar.GetSimVarValue(`A:COM TRANSMIT:${i}`, "bool")
+            activeCom = isActive ? i : activeCom
+            if (isActive) { break }
+        }
+
+        return SimVar.GetSimVarValue(`A:COM ACTIVE FREQUENCY:${activeCom}`, "Bcd16").toString().slice(1, 6)
     }
 
     handleFrontEndEvents() {
@@ -103,8 +69,6 @@ export class Backend {
 
         this.subscriber.on("connectToNetwork").handle((values) => {
             this.websocket.send(`ConnectToNetwork<|>Callsign:${values.callsign}<|>TypeCode:${values.aircraft}<|>SelCal:${values.selcal}`)
-            this.aircraftSetting.getSetting('callsign').set(values.callsign)
-            this.aircraftSetting.getSetting('selcal').set(values.selcal)
         })
 
         this.subscriber.on("disconnectFromNetwork").handle(() => {
@@ -112,27 +76,32 @@ export class Backend {
         })
 
         this.subscriber.on("fileFlightPlan").handle((values) => {
-            this.websocket.send(`SendFlightPlan<|>Departure:${values.departure}<|>Arrival:${values.arrival}<|>Alternate:${values.alternate}<|>CruiseAlt:${values.cruiseAlt / 10}<|>CruiseSpeed:${values.cruiseSpeed / 10}<|>Route:${values.route}<|>Remarks:${values.remarks}<|>DepartureTime:${values.departureTime}`)
+            this.websocket.send(`SendFlightPlan<|>Departure:${values.departure}<|>Arrival:${values.arrival}<|>Alternate:${values.alternate}<|>CruiseAlt:${values.cruiseAlt / 100}<|>CruiseSpeed:${values.cruiseSpeed}<|>Route:${values.route}<|>Remarks:${values.remarks}<|>DepartureTime:${values.departureTime}`)
             this.websocket.send(`SendFlightPlan<|>HoursEnroute:${values.hoursEnroute}<|>MinsEnroute:${values.minsEnroute}<|>HoursFuel:${values.hoursFuel}<|>MinsFuel:${values.minsFuel}<|>EquipmentCode:${values.equipment}<|>IsVFR:${values.isVFR}<|>FilePlan:true`)
-
-            this.flightPlanSetting.getSetting('departureAirport').set(values.departure)
-            this.flightPlanSetting.getSetting('arrivalAirport').set(values.arrival)
-            this.flightPlanSetting.getSetting('alternateAirport').set(values.alternate)
-            this.flightPlanSetting.getSetting('departureTime').set(values.departureTime)
-            this.flightPlanSetting.getSetting('equipmentSuffix').set(values.equipment)
-            this.flightPlanSetting.getSetting('hoursEnroute').set(values.hoursEnroute)
-            this.flightPlanSetting.getSetting('minsEnroute').set(values.minsEnroute)
-            this.flightPlanSetting.getSetting('hoursFuel').set(values.hoursFuel)
-            this.flightPlanSetting.getSetting('minsFuel').set(values.minsFuel)
-            this.flightPlanSetting.getSetting('cruiseSpeed').set(values.cruiseSpeed)
-            this.flightPlanSetting.getSetting('cruiseAltitude').set(values.cruiseAlt)
-            this.flightPlanSetting.getSetting('route').set(values.route)
-            this.flightPlanSetting.getSetting('remarks').set(values.remarks)
-            this.flightPlanSetting.getSetting('isVFR').set(values.isVFR)
         })
 
         this.subscriber.on("fetchFlightPlan").handle(() => {
             this.websocket.send("FetchFlightPlan")
+        })
+
+        this.subscriber.on('setRadioKey').handle((keyCode) => {
+            this.generalSettings.getSetting('radioKey').set(keyCode)
+        })
+
+        this.subscriber.on('sendMessage').handle((message) => {
+            let commsOn = SimVar.GetSimVarValue("A:CIRCUIT COM ON", "bool")
+            if (commsOn) {
+                let frequency = this.getActiveFrequency()
+                this.websocket.send(`SendRadioMessage<|>Text:${message}`)
+                this.publisher.pub("newMessage", { callsign: this.callsign || '', message: message, broadcast: false, frequencies: [frequency] })
+            }
+
+        })
+
+        document.addEventListener('keydown', (event) => {
+            if (this.generalSettings.getSetting('radioKey').get() == event.keyCode) {
+                this.radioRef.instance.radioOpen.set(!this.radioRef.instance.radioOpen.get())
+            }
         })
     }
 
@@ -159,13 +128,14 @@ export class Backend {
 
         switch (type) {
             case "NetworkConnectionEstablished":
+                this.callsign = args["CallSign"]
                 this.publisher.pub("networkCallsign", args["CallSign"], true)
                 break;
             case "DisconnectedFromNetwork":
                 this.publisher.pub("networkCallsign", undefined, true)
                 break;
             case "FlightPlanReceived":
-                if (args["Callsign"] == this.aircraftSetting.getSetting('callsign').get()) {
+                if (args["Callsign"] == this.callsign) {
                     this.publisher.pub("flightPlanReceived", {
                         departure: args["Departure"],
                         arrival: args["Destination"],
@@ -210,7 +180,14 @@ export class Backend {
                     this.publisher.pub("controllerChange", controllerChange, true);
                 }
                 break;
-
+            case "RadioMessageReceived":
+                this.publisher.pub("newMessage", { callsign: args["From"], message: args["Text"], broadcast: false, frequencies: args["Frequencies"].split(",") })
+                break;
+            case "BroadcastMessageReceived":
+                this.publisher.pub("newMessage", { callsign: "BROADCAST: " + args["From"], message: args["Text"], broadcast: true })
+                break;
+            case "RemoveMessage":
+                this.publisher.pub("deleteMessage", args["Message"])
         }
     }
 
@@ -224,6 +201,7 @@ export class Backend {
         }
 
         this.publisher.pub("establishedConnection", false, true);
+        this.publisher.pub("networkCallsign", undefined, true)
 
         if (!this.awaitingConnection) {
             this.awaitingConnection = true;
@@ -241,6 +219,7 @@ export class Backend {
 
                 if (this.timeToRetry == 0) {
                     this.timeToRetry = 20;
+                    this.websocket = new WebSocket(websocketUri);
                     this.createWebsocket();
                 }
             }, 1000);
@@ -254,7 +233,6 @@ export class Backend {
         }
 
         this.awaitingConnection = false
-        this.websocket = new WebSocket(websocketUri);
         this.websocket.onopen = (e) => this.handleEstablishedConnection(e);
         this.websocket.onclose = (e) => this.handleConnectionClose(e);
         this.websocket.onmessage = (e) => this.handleMessage(e);
@@ -266,6 +244,5 @@ export class Backend {
 document.addEventListener("DOMContentLoaded", () => {
     checkSimVarLoaded.then(() => {
         new Backend()
-        FSComponent.render(<RadioPanel />, document.querySelector("body"))
     })
 });
