@@ -69,6 +69,10 @@ export class InputBar extends DisplayComponent<InputBarProps> {
         return this.ref
     }
 
+    public unFocus(): void {
+        this.getInputBar().instance.blur()
+    }
+
     public render(): VNode {
         return (
             <ui-input ref={this.ref} class={this.props.class} id={this.props.id} type="text" no-tooltip no-key-navigation not-pad-interactive idevent="0" />

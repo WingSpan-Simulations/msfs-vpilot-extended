@@ -131,11 +131,6 @@ export class RadioPanel extends DisplayComponent<RadioPanelProps> {
         })
 
         mutationObserver.observe(this.messageContainerRef.instance, observerConfig);
-
-        this.renderMessage('MNHAS', 'TEST 1', false)
-        this.renderMessage('EDDF_FSS_CTR', 'yo', false)
-        this.renderMessage('EZY81RC', 'sup dog', true)
-        this.renderMessage('BAW212', 'joshed it fujagiojogaKLSJFGILKASGFILKAGSLKIFJGJAKLSGFJKLZG\SJFKLGASJLKFHGHAKLSGJFKLASGFKJGAJKLFGJHAKGJFKHGSJHGhjgJKHFJHGVSJHFGAJLSGFKJASHKFJAHSKLFGASKJFHKJSDHGLKDSH;LGJDSAGSDFGDHFGKHDKLJGGhglkgjhgksjkdghksjdhgkjdbkjgbskjgdhks;glsdlkg;ASKJGL;KSDJAGLJSAKL', false)
     }
 
     private onTextbarInput(input: string) {
@@ -146,14 +141,20 @@ export class RadioPanel extends DisplayComponent<RadioPanelProps> {
         if (this.currentCallsign.get() && this.currentMessage && this.currentMessage.length > 0) {
             this.publisher.pub('sendMessage', this.currentMessage)
         }
+        this.currentMessage = ''
+        this.inputBarRef.instance.setInputText('')
     }
 
     private openRadio() {
         this.mainRef.instance.style.transform = `translateY(0px)`
-        this.mainRef.instance.style.maxHeight = '1000px'
+        this.mainRef.instance.style.maxHeight = '400px'
+        setTimeout(() => {
+            this.scrollRef.instance.scrollToBottom()
+        }, 500);
     }
 
     private closeRadio() {
+        this.inputBarRef.instance.unFocus()
         this.mainRef.instance.style.maxHeight = '52px'
         this.mainRef.instance.style.transform = `translateY(-350px)`
     }

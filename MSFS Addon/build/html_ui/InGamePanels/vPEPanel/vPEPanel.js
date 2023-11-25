@@ -20250,6 +20250,9 @@
         getInputBar() {
             return this.ref;
         }
+        unFocus() {
+            this.getInputBar().instance.blur();
+        }
         render() {
             return (FSComponent.buildComponent("ui-input", { ref: this.ref, class: this.props.class, id: this.props.id, type: "text", "no-tooltip": true, "no-key-navigation": true, "not-pad-interactive": true, idevent: "0" }));
         }
